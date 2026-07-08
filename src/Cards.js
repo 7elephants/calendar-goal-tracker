@@ -19,7 +19,11 @@
  *     - step: 4
  *       call: "buildDatePickerCard(dateKey)"
  *       input: "dateKey: 'YYYY-MM-DD' currently selected"
- *       output: "CardService.Card with a DatePicker widget and a 'Go' button"
+ *       output: "CardService.Card with a DatePicker widget (seeded via CalendarService.dateKeyToUtcMs, since the widget is UTC-based) and a 'Go' button"
+ *     - step: 5
+ *       call: "buildErrorCard(message)"
+ *       input: "message: string"
+ *       output: "CardService.Card shown in place of the home card when a Calendar API call fails, so a backend error never surfaces as a raw crash"
  * ---
  */
 
@@ -127,20 +131,27 @@ function buildCreateGoalCard() {
 }
 
 function buildDatePickerCard(dateKey) {
-  var parts = dateKey.split('-').map(Number);
-  var current = new Date(parts[0], parts[1] - 1, parts[2]);
-
   var header = CardService.newCardHeader().setTitle('Choose a day');
   var datePicker = CardService.newDatePicker()
     .setFieldName('selectedDate')
     .setTitle('Day')
-    .setValueInMsSinceEpoch(current.getTime());
+    .setValueInMsSinceEpoch(dateKeyToUtcMs(dateKey));
 
   var goAction = CardService.newAction().setFunctionName('handleGoToDate');
   var goButton = CardService.newTextButton().setText('Go').setOnClickAction(goAction);
 
   var section = CardService.newCardSection().addWidget(datePicker).addWidget(goButton);
 
+  return CardService.newCardBuilder().setHeader(header).addSection(section).build();
+}
+
+function buildErrorCard(message) {
+  var header = CardService.newCardHeader().setTitle('Goals & Habits');
+  var section = CardService.newCardSection().addWidget(
+    CardService.newTextParagraph().setText(
+      'Something went wrong talking to Google Calendar: ' + message + '\n\nTry reopening the add-on.'
+    )
+  );
   return CardService.newCardBuilder().setHeader(header).addSection(section).build();
 }
 

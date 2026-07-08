@@ -7,7 +7,7 @@
  *     - step: 1
  *       call: "onHomepage(e)"
  *       input: "Calendar add-on event object (Apps Script runtime callback)"
- *       output: "CardService.Card for today, built from GoalService.listGoals() + CalendarService.getGoalStatusForDate()"
+ *       output: "CardService.Card for today, built from GoalService.listGoals() + CalendarService.getGoalStatusForDate(); falls back to Cards.buildErrorCard() if the Calendar API call fails"
  *     - step: 2
  *       call: "onCalendarEventOpen(e)"
  *       input: "Calendar add-on event object with e.calendar.id and the opened event"
@@ -15,11 +15,11 @@
  *     - step: 3
  *       call: "handleMarkStatus(e)"
  *       input: "e.parameters: { goalId, dateKey, status: 'success'|'fail'|'clear' }"
- *       output: "ActionResponse that updates the card in place via CalendarService.setGoalStatus()"
+ *       output: "ActionResponse that updates the card in place via CalendarService.setGoalStatus(), or an error notification if the Calendar API call fails"
  *     - step: 4
  *       call: "handleOpenCreateGoalCard(e) / handleCreateGoalSubmit(e) / handleOpenDatePickerCard(e) / handleGoToDate(e) / handleDeleteGoal(e)"
  *       input: "varies: e.parameters or e.formInput depending on the widget that triggered the action"
- *       output: "ActionResponse that either pushes a new card or updates the current card"
+ *       output: "ActionResponse that either pushes a new card or updates the current card. handleGoToDate parses the DatePicker's UTC epoch-ms value with CalendarService.utcMsToDateKey (not getDateKey, which is local-time) to avoid an off-by-one-day bug."
  * ---
  */
 
@@ -27,12 +27,16 @@ function todayDateKey_() {
   return getDateKey(new Date());
 }
 
+function dateKeyToDate_(dateKey) {
+  var parts = dateKey.split('-').map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
 function buildHomeCardForDate_(dateKey) {
   var goals = listGoals().filter(function (g) {
     return g.active !== false;
   });
-  var parts = dateKey.split('-').map(Number);
-  var date = new Date(parts[0], parts[1] - 1, parts[2]);
+  var date = dateKeyToDate_(dateKey);
 
   var goalsWithStatus = goals.map(function (goal) {
     return { goal: goal, status: getGoalStatusForDate(goal.id, date) };
@@ -41,16 +45,35 @@ function buildHomeCardForDate_(dateKey) {
   return buildHomeCard(dateKey, goalsWithStatus);
 }
 
+/**
+ * Wraps buildHomeCardForDate_ so a Calendar API failure (quota, transient
+ * error, revoked scope) renders an error card instead of crashing the
+ * whole add-on homepage.
+ */
+function buildHomeCardOrErrorCard_(dateKey) {
+  try {
+    return buildHomeCardForDate_(dateKey);
+  } catch (err) {
+    return buildErrorCard(err.message);
+  }
+}
+
 function onHomepage(e) {
-  return buildHomeCardForDate_(todayDateKey_());
+  return buildHomeCardOrErrorCard_(todayDateKey_());
 }
 
 function onCalendarEventOpen(e) {
-  return buildHomeCardForDate_(todayDateKey_());
+  return buildHomeCardOrErrorCard_(todayDateKey_());
 }
 
 function handleMarkStatus(e) {
-  var params = e.parameters;
+  var params = e.parameters || {};
+  if (!params.goalId || !params.dateKey || !params.status) {
+    return CardService.newActionResponseBuilder()
+      .setNotification(CardService.newNotification().setText('Missing action data; please try again.'))
+      .build();
+  }
+
   var goal = getGoal(params.goalId);
   if (!goal) {
     return CardService.newActionResponseBuilder()
@@ -58,12 +81,18 @@ function handleMarkStatus(e) {
       .build();
   }
 
-  var parts = params.dateKey.split('-').map(Number);
-  var date = new Date(parts[0], parts[1] - 1, parts[2]);
+  var date = dateKeyToDate_(params.dateKey);
   var status = params.status === 'clear' ? null : params.status;
-  setGoalStatus(goal, date, status);
 
-  var updatedCard = buildHomeCardForDate_(params.dateKey);
+  try {
+    setGoalStatus(goal, date, status);
+  } catch (err) {
+    return CardService.newActionResponseBuilder()
+      .setNotification(CardService.newNotification().setText('Could not save to Calendar: ' + err.message))
+      .build();
+  }
+
+  var updatedCard = buildHomeCardOrErrorCard_(params.dateKey);
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation().updateCard(updatedCard))
     .setNotification(CardService.newNotification().setText('Saved.'))
@@ -87,7 +116,7 @@ function handleCreateGoalSubmit(e) {
       .build();
   }
 
-  var updatedCard = buildHomeCardForDate_(todayDateKey_());
+  var updatedCard = buildHomeCardOrErrorCard_(todayDateKey_());
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation().popCard().updateCard(updatedCard))
     .setNotification(CardService.newNotification().setText('Goal created.'))
@@ -105,19 +134,24 @@ function handleOpenDatePickerCard(e) {
 function handleGoToDate(e) {
   var formInput = e.formInput || {};
   var msString = formInput.selectedDate;
-  var dateKey = msString ? getDateKey(new Date(Number(msString))) : todayDateKey_();
+  var dateKey = msString ? utcMsToDateKey(Number(msString)) : todayDateKey_();
 
-  var updatedCard = buildHomeCardForDate_(dateKey);
+  var updatedCard = buildHomeCardOrErrorCard_(dateKey);
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation().popCard().updateCard(updatedCard))
     .build();
 }
 
 function handleDeleteGoal(e) {
-  var params = e.parameters;
+  var params = e.parameters || {};
+  if (!params.goalId) {
+    return CardService.newActionResponseBuilder()
+      .setNotification(CardService.newNotification().setText('Missing goal id; please try again.'))
+      .build();
+  }
   deleteGoal(params.goalId);
 
-  var updatedCard = buildHomeCardForDate_(todayDateKey_());
+  var updatedCard = buildHomeCardOrErrorCard_(todayDateKey_());
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation().updateCard(updatedCard))
     .setNotification(CardService.newNotification().setText('Goal deleted. Past calendar events are kept.'))

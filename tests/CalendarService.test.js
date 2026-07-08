@@ -70,6 +70,27 @@ describe('CalendarService', function () {
     });
   });
 
+  describe('dateKeyToUtcMs / utcMsToDateKey', function () {
+    it('round-trips a dateKey through UTC epoch ms regardless of local timezone', function () {
+      var ms = CalendarService.dateKeyToUtcMs('2026-01-05');
+      expect(CalendarService.utcMsToDateKey(ms)).toBe('2026-01-05');
+    });
+
+    it('produces UTC midnight for the given day', function () {
+      var ms = CalendarService.dateKeyToUtcMs('2026-01-05');
+      var d = new Date(ms);
+      expect(d.getUTCFullYear()).toBe(2026);
+      expect(d.getUTCMonth()).toBe(0);
+      expect(d.getUTCDate()).toBe(5);
+      expect(d.getUTCHours()).toBe(0);
+    });
+
+    it('rolls over year boundaries correctly', function () {
+      var ms = CalendarService.dateKeyToUtcMs('2025-12-31');
+      expect(CalendarService.utcMsToDateKey(ms)).toBe('2025-12-31');
+    });
+  });
+
   describe('buildEventTitle', function () {
     it('includes icon, name, and a success mark', function () {
       expect(CalendarService.buildEventTitle(goal, 'success')).toBe('🏃 Run 3 miles ✅');

@@ -24,6 +24,10 @@
  *       call: "getGoalStatusForDate(goalId, date)"
  *       input: "goalId: string, date: Date"
  *       output: "'success' | 'fail' | null"
+ *     - step: 6
+ *       call: "dateKeyToUtcMs(dateKey) / utcMsToDateKey(ms)"
+ *       input: "'YYYY-MM-DD' string, or epoch ms"
+ *       output: "the inverse value. Used only for the CardService DatePicker round trip, which is UTC-based regardless of the script's timezone (see Cards.js/Code.js) — kept separate from getDateKey (local time) to avoid an off-by-one-day bug."
  * ---
  */
 
@@ -48,6 +52,26 @@ function addDaysToDateKey(dateKey, days) {
   var d = new Date(parts[0], parts[1] - 1, parts[2]);
   d.setDate(d.getDate() + days);
   return getDateKey(d);
+}
+
+/**
+ * CardService's DatePicker widget stores/returns its value as UTC midnight
+ * for the displayed day, regardless of the script's timezone. Use these two
+ * functions (not getDateKey, which is local-time) whenever converting to/from
+ * a DatePicker's epoch-ms value, or the selected day will be off by one in
+ * any timezone west of UTC.
+ */
+function dateKeyToUtcMs(dateKey) {
+  var parts = dateKey.split('-').map(Number);
+  return Date.UTC(parts[0], parts[1] - 1, parts[2]);
+}
+
+function utcMsToDateKey(ms) {
+  var d = new Date(ms);
+  var year = d.getUTCFullYear();
+  var month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  var day = String(d.getUTCDate()).padStart(2, '0');
+  return year + '-' + month + '-' + day;
 }
 
 function buildEventTitle(goal, status) {
@@ -77,6 +101,9 @@ function buildEventResource(goal, dateKey, status) {
 }
 
 function findEventForGoalOnDate(goalId, dateKey) {
+  // maxResults: 1 is safe only because the (app, goalId, dateKey) triple is
+  // meant to be unique — there should be at most one live tagged event per
+  // goal per day.
   var response = Calendar.Events.list(CALENDAR_ID, {
     privateExtendedProperty: ['app=' + APP_TAG, 'goalId=' + goalId, 'dateKey=' + dateKey],
     singleEvents: true,
@@ -91,6 +118,12 @@ function findEventForGoalOnDate(goalId, dateKey) {
 /**
  * Creates, updates, or removes the all-day status event for a goal on a given day.
  * status === null clears any existing status event for that day.
+ *
+ * Known limitation: this is a find-then-write, not an atomic upsert. Two
+ * overlapping calls for the same goal/day (e.g. a double-click before the
+ * card re-renders) can both miss the "existing" check and each insert their
+ * own event, leaving a duplicate. There is no dedup pass on read today;
+ * findEventForGoalOnDate would just return one of the duplicates.
  */
 function setGoalStatus(goal, date, status) {
   var dateKey = getDateKey(date);
@@ -124,6 +157,8 @@ if (typeof module !== 'undefined') {
   module.exports = {
     getDateKey: getDateKey,
     addDaysToDateKey: addDaysToDateKey,
+    dateKeyToUtcMs: dateKeyToUtcMs,
+    utcMsToDateKey: utcMsToDateKey,
     buildEventTitle: buildEventTitle,
     buildEventResource: buildEventResource,
     findEventForGoalOnDate: findEventForGoalOnDate,

@@ -76,6 +76,13 @@ describe('GoalService', function () {
         GoalService.validateGoalInput({ name: 'Run', icon: '🏃' });
       }).not.toThrow();
     });
+
+    it('accepts a compound ZWJ emoji even though it is >4 UTF-16 units', function () {
+      // "person running: female sign" = runner + ZWJ + female sign + VS16 = 4 code points, 7 UTF-16 units
+      expect(function () {
+        GoalService.validateGoalInput({ name: 'Run', icon: '🏃‍♀️' });
+      }).not.toThrow();
+    });
   });
 
   describe('listGoals', function () {
