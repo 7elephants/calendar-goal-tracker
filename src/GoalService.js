@@ -76,10 +76,12 @@ function validateGoalInput(input) {
   if (
     typeof input.durationDays !== 'number' ||
     !Number.isInteger(input.durationDays) ||
-    input.durationDays < 1 ||
+    input.durationDays < 0 ||
     input.durationDays > MAX_DURATION_DAYS
   ) {
-    throw new Error('Duration must be a whole number of days between 1 and ' + MAX_DURATION_DAYS + '.');
+    throw new Error(
+      'Duration must be a whole number of days between 0 and ' + MAX_DURATION_DAYS + ' (0 = forever).'
+    );
   }
 }
 

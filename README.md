@@ -21,17 +21,23 @@ check.
   can jump straight to any day, not just step through one at a time.
 - **+ New goal** opens a form (name, icon, start date, and duration in days)
   and saves it to your Apps Script user properties — this is
-  per-Google-account, private to you.
-- Each goal has a start date and a duration (in days). This is purely
-  informational: outside that window the goal shows a badge ("Starts ..." /
+  per-Google-account, private to you. A duration of **0 means the goal runs
+  forever** (leaving the field blank does the same).
+- The **✏️ Edit** button on a goal row opens the same form pre-filled with
+  that goal's current name, icon, start date, and duration, and saves your
+  changes back to the same goal on submit.
+- Each goal has a start date and a duration (in days), or no duration at all
+  for a goal that runs forever. This is purely informational: outside a
+  fixed-duration goal's window the goal shows a badge ("Starts ..." /
   "🏁 Completed") on the home card, but the Mark done / Mark missed / Clear
-  buttons still work on any day regardless of the window.
+  buttons still work on any day regardless of the window. Forever goals never
+  show that badge.
 - A **Goal summary** section below today's goals lists every active goal —
   icon, duration, days left, and running ✅ done / ❌ missed counts — always
   relative to today regardless of which day you're viewing via Choose day.
-  Goals with no stored duration (only possible for goals created before that
-  field existed) show "∞" for duration/days left and count done/missed from
-  their start date (or creation date) through today.
+  Forever goals (duration 0, or goals created before the duration field
+  existed) show "∞" for duration/days left and count done/missed from their
+  start date (or creation date) through today.
 - Deleting a goal only stops future tracking; it does **not** delete past
   calendar events, so your history stays intact.
 
@@ -41,7 +47,7 @@ stored anywhere else — it lives entirely on the Calendar event via
 `extendedProperties.private` (`goalId`, `dateKey`, `status`), so the
 calendar is the single source of truth for your history. Goals created
 before this feature existed have no start date/duration stored; they're
-read back with no window badge and behave exactly as before.
+read back with no window badge and behave exactly like a forever goal.
 
 ## Project layout
 
@@ -116,9 +122,16 @@ covered by the manual test plan below instead.
 - [ ] Create a second goal, confirm both show independently with independent statuses per day.
 - [ ] Delete a goal; confirm it disappears from the home card but its past calendar events remain.
 - [ ] Submit the "New goal" form with an empty name; confirm a validation error notification appears and no goal is created.
-- [ ] Submit the "New goal" form with a duration of 0 or blank; confirm a validation error notification appears.
+- [ ] Submit the "New goal" form with a duration of 0; confirm the goal is created with no window badge, and its Goal summary row shows "∞" for duration/days left.
+- [ ] Submit the "New goal" form with a blank duration; confirm the same forever behavior as duration 0.
+- [ ] Submit the "New goal" form with a negative duration (e.g. -1); confirm a validation error notification appears.
 - [ ] Create a goal with a start date in the future; confirm the home card shows a "Starts ..." badge and Mark done/Mark missed still work.
 - [ ] Create a goal with a past start date and a short duration so the window has already elapsed; confirm a "🏁 Completed" badge appears and Mark done/Mark missed still work.
+- [ ] Tap "Edit" on a goal; confirm the form opens pre-filled with its current name, icon, start date, and duration.
+- [ ] Edit a goal's name/icon/start date/duration and save; confirm the home card and Goal summary reflect the change, and past calendar events for that goal are unaffected.
+- [ ] Edit a fixed-duration goal's duration to 0 and save; confirm its window badge disappears and its Goal summary row switches to "∞".
+- [ ] Submit the "Edit goal" form with an empty name; confirm a validation error notification appears and the goal is left unchanged.
+- [ ] Tap "Edit" on a goal that predates the start-date/duration feature (no stored startDate/durationDays, if you have one); confirm the form opens without error, pre-filled with today's date and a duration of 0.
 - [ ] In the Goal summary section, confirm each goal shows the right icon, duration, days left, and done/missed counts; mark a few days done/missed and confirm the counts update after reopening the add-on.
 - [ ] Confirm the Goal summary numbers don't change when you navigate to a different day (they should stay pinned to today).
 - [ ] Reload Calendar entirely and reopen the add-on; confirm goals and today's statuses persist (PropertiesService + Calendar are both durable).

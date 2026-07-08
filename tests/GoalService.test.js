@@ -112,9 +112,15 @@ describe('GoalService', function () {
       }).toThrow('Duration must be');
     });
 
-    it('throws when durationDays is zero or negative', function () {
+    it('accepts durationDays of 0 to mean the goal runs forever', function () {
       expect(function () {
         GoalService.validateGoalInput(validGoalInput({ durationDays: 0 }));
+      }).not.toThrow();
+    });
+
+    it('throws when durationDays is negative', function () {
+      expect(function () {
+        GoalService.validateGoalInput(validGoalInput({ durationDays: -1 }));
       }).toThrow('Duration must be');
     });
 
@@ -155,6 +161,11 @@ describe('GoalService', function () {
       }).toThrow('Goal name is required.');
       expect(GoalService.listGoals()).toHaveLength(0);
     });
+
+    it('creates a goal with durationDays 0 to mean it runs forever', function () {
+      var goal = GoalService.createGoal(validGoalInput({ durationDays: 0 }));
+      expect(goal.durationDays).toBe(0);
+    });
   });
 
   describe('getGoal', function () {
@@ -184,6 +195,13 @@ describe('GoalService', function () {
 
       expect(updated.startDate).toBe('2026-08-01');
       expect(updated.durationDays).toBe(60);
+    });
+
+    it('updates durationDays to 0 to make a fixed-duration goal run forever', function () {
+      var created = GoalService.createGoal(validGoalInput({ name: 'Meditate', icon: '🧘' }));
+      var updated = GoalService.updateGoal(created.id, { durationDays: 0 });
+
+      expect(updated.durationDays).toBe(0);
     });
 
     it('throws for an unknown goal id', function () {
