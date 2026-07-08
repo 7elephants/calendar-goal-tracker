@@ -7,20 +7,24 @@
  *     - step: 1
  *       call: "formatStatusLabel(status)"
  *       input: "'success' | 'fail' | null"
- *       output: "human readable label string, e.g. 'Done', 'Missed', ''"
+ *       output: "emoji status label string: '✅', '❌', or ''"
  *     - step: 2
  *       call: "buildHomeCard(dateKey, goalsWithStatus)"
  *       input: "dateKey: 'YYYY-MM-DD', goalsWithStatus: Array<{ goal: Goal, status: string|null, summary: CalendarService.getGoalSummaryStats() result }>"
- *       output: "CardService.Card with no CardHeader (title is required by CardHeader so an empty one is unsafe; the add-on's own name in Calendar's chrome already labels the card). First widget is a date-nav row (chevron_left/chevron_right call handleShiftDay to move +/-1 day in place; the date label between them calls handleOpenDatePickerCard). Then today's goals (Mark done/Mark missed/Clear buttons), a read-only 'Goal summary' section (icon, duration, days left/done/missed per goal), and a Create goal action."
+ *       output: "CardService.Card with no CardHeader (title is required by CardHeader so an empty one is unsafe; the add-on's own name in Calendar's chrome already labels the card). First widget is a date-nav row (chevron_left/chevron_right call handleShiftDay to move +/-1 day in place; the date label between them calls handleOpenDatePickerCard). Then today's goals (Mark done/Mark missed/Clear/Edit buttons), a read-only 'Goal summary' section (icon, duration, days left/done/missed per goal; duration/days-left render as '∞' for forever goals, i.e. durationDays === 0), and a Create goal action."
  *     - step: 3
  *       call: "buildCreateGoalCard()"
  *       input: "none"
- *       output: "CardService.Card with name/icon TextInputs, a start-date DatePicker (defaulted to today), a duration-in-days TextInput, and a submit button"
+ *       output: "CardService.Card with name/icon TextInputs, a start-date DatePicker (defaulted to today), a duration-in-days TextInput (hinted that 0 means forever), and a submit button"
  *     - step: 4
+ *       call: "buildEditGoalCard(goal)"
+ *       input: "goal: Goal"
+ *       output: "CardService.Card identical in shape to buildCreateGoalCard() but pre-filled with the goal's current name/icon/startDate/durationDays; submit action carries goalId as a parameter (not a form field) so handleEditGoalSubmit knows which goal to update"
+ *     - step: 5
  *       call: "buildDatePickerCard(dateKey)"
  *       input: "dateKey: 'YYYY-MM-DD' currently selected"
  *       output: "CardService.Card with a DatePicker widget (seeded via CalendarService.dateKeyToUtcMs, since the widget is UTC-based) and a 'Go to day' button"
- *     - step: 5
+ *     - step: 6
  *       call: "buildErrorCard(message)"
  *       input: "message: string"
  *       output: "CardService.Card shown in place of the home card when a Calendar API call fails, so a backend error never surfaces as a raw crash"
@@ -35,10 +39,10 @@ var GOAL_COLOR_FAIL = '#d93025';
 
 function formatStatusLabel(status) {
   if (status === 'success') {
-    return 'Done ✅';
+    return '✅';
   }
   if (status === 'fail') {
-    return 'Missed ❌';
+    return '❌';
   }
   return '';
 }
@@ -118,6 +122,9 @@ function buildGoalRowWidget(goal, dateKey, status) {
   var clearAction = CardService.newAction()
     .setFunctionName('handleMarkStatus')
     .setParameters({ goalId: goal.id, dateKey: dateKey, status: 'clear' });
+  var editAction = CardService.newAction()
+    .setFunctionName('handleOpenEditGoalCard')
+    .setParameters({ goalId: goal.id });
   var deleteAction = CardService.newAction()
     .setFunctionName('handleDeleteGoal')
     .setParameters({ goalId: goal.id });
@@ -160,6 +167,12 @@ function buildGoalRowWidget(goal, dateKey, status) {
         .setMaterialIcon(CardService.newMaterialIcon().setName('undo'))
         .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
         .setOnClickAction(clearAction)
+    )
+    .addButton(
+      CardService.newTextButton()
+        .setMaterialIcon(CardService.newMaterialIcon().setName('edit'))
+        .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
+        .setOnClickAction(editAction)
     );
 
   return { decoratedText: decoratedText, buttonSet: buttonSet };
@@ -209,9 +222,16 @@ function buildHomeCard(dateKey, goalsWithStatus) {
     .build();
 }
 
-function buildCreateGoalCard() {
-  var header = CardService.newCardHeader().setTitle('New goal');
-
+/**
+ * Shared by buildCreateGoalCard/buildEditGoalCard. `prefill` is null for a
+ * fresh goal (defaults to today's start date, blank name/icon/duration), or
+ * an existing Goal for editing. Goals created before startDate/durationDays
+ * existed (or a forever goal, durationDays: 0) fall back the same way here
+ * as they do everywhere else in the app: missing startDate defaults to
+ * today, missing/0 durationDays pre-fills as "0" (forever) rather than the
+ * literal string "undefined".
+ */
+function buildGoalFormSection_(prefill) {
   var nameInput = CardService.newTextInput()
     .setFieldName('goalName')
     .setTitle('Goal name')
@@ -223,11 +243,27 @@ function buildCreateGoalCard() {
   var startDateInput = CardService.newDatePicker()
     .setFieldName('goalStartDate')
     .setTitle('Start date')
-    .setValueInMsSinceEpoch(dateKeyToUtcMs(getDateKey(new Date())));
+    .setValueInMsSinceEpoch(dateKeyToUtcMs((prefill && prefill.startDate) || getDateKey(new Date())));
   var durationInput = CardService.newTextInput()
     .setFieldName('goalDurationDays')
     .setTitle('Duration (days)')
-    .setHint('e.g. 30');
+    .setHint('e.g. 30 (0 = forever)');
+
+  if (prefill) {
+    nameInput.setValue(prefill.name);
+    iconInput.setValue(prefill.icon);
+    durationInput.setValue(String(prefill.durationDays || 0));
+  }
+
+  return CardService.newCardSection()
+    .addWidget(nameInput)
+    .addWidget(iconInput)
+    .addWidget(startDateInput)
+    .addWidget(durationInput);
+}
+
+function buildCreateGoalCard() {
+  var header = CardService.newCardHeader().setTitle('New goal');
 
   var submitAction = CardService.newAction().setFunctionName('handleCreateGoalSubmit');
   var submitButton = CardService.newTextButton()
@@ -237,12 +273,25 @@ function buildCreateGoalCard() {
     .setBackgroundColor(GOAL_COLOR_PRIMARY)
     .setOnClickAction(submitAction);
 
-  var section = CardService.newCardSection()
-    .addWidget(nameInput)
-    .addWidget(iconInput)
-    .addWidget(startDateInput)
-    .addWidget(durationInput)
-    .addWidget(submitButton);
+  var section = buildGoalFormSection_(null).addWidget(submitButton);
+
+  return CardService.newCardBuilder().setHeader(header).addSection(section).build();
+}
+
+function buildEditGoalCard(goal) {
+  var header = CardService.newCardHeader().setTitle('Edit goal');
+
+  var submitAction = CardService.newAction()
+    .setFunctionName('handleEditGoalSubmit')
+    .setParameters({ goalId: goal.id });
+  var submitButton = CardService.newTextButton()
+    .setText('Save changes')
+    .setMaterialIcon(CardService.newMaterialIcon().setName('check'))
+    .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+    .setBackgroundColor(GOAL_COLOR_PRIMARY)
+    .setOnClickAction(submitAction);
+
+  var section = buildGoalFormSection_(goal).addWidget(submitButton);
 
   return CardService.newCardBuilder().setHeader(header).addSection(section).build();
 }

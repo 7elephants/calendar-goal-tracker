@@ -162,6 +162,11 @@ describe('CalendarService', function () {
       expect(CalendarService.getGoalWindowStatus(goal, '2026-07-08')).toBeNull();
     });
 
+    it('returns null for a forever goal (durationDays: 0), same as no badge at all', function () {
+      var foreverGoal = { id: 'goal-1', name: 'Meditate', icon: '🧘', startDate: '2026-07-01', durationDays: 0 };
+      expect(CalendarService.getGoalWindowStatus(foreverGoal, '2026-07-08')).toBeNull();
+    });
+
     it('returns "upcoming" before the start date', function () {
       expect(CalendarService.getGoalWindowStatus(windowedGoal, '2026-06-30')).toBe('upcoming');
     });
@@ -289,6 +294,23 @@ describe('CalendarService', function () {
         name: 'Meditate',
         icon: '🧘',
         startDate: '2026-01-01',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      };
+      CalendarService.setGoalStatus(foreverGoal, new Date(2026, 5, 1), 'success');
+
+      var stats = CalendarService.getGoalSummaryStats(foreverGoal, '2026-07-08');
+      expect(stats.durationDays).toBeNull();
+      expect(stats.daysLeft).toBeNull();
+      expect(stats.daysDone).toBe(1);
+    });
+
+    it('treats durationDays: 0 as infinite (null), same as an absent durationDays field', function () {
+      var foreverGoal = {
+        id: 'goal-1',
+        name: 'Meditate',
+        icon: '🧘',
+        startDate: '2026-01-01',
+        durationDays: 0,
         createdAt: '2026-01-01T00:00:00.000Z'
       };
       CalendarService.setGoalStatus(foreverGoal, new Date(2026, 5, 1), 'success');
