@@ -9,11 +9,11 @@ var Cards = require('../src/Cards.js');
 
 describe('Cards.formatStatusLabel', function () {
   it('labels a success status', function () {
-    expect(Cards.formatStatusLabel('success')).toBe('Done ✅');
+    expect(Cards.formatStatusLabel('success')).toBe('✅');
   });
 
   it('labels a fail status', function () {
-    expect(Cards.formatStatusLabel('fail')).toBe('Missed ❌');
+    expect(Cards.formatStatusLabel('fail')).toBe('❌');
   });
 
   it('labels a null status as not set', function () {

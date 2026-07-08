@@ -7,7 +7,7 @@
  *     - step: 1
  *       call: "formatStatusLabel(status)"
  *       input: "'success' | 'fail' | null"
- *       output: "human readable label string, e.g. 'Done', 'Missed', ''"
+ *       output: "emoji status label string: '✅', '❌', or ''"
  *     - step: 2
  *       call: "buildHomeCard(dateKey, goalsWithStatus)"
  *       input: "dateKey: 'YYYY-MM-DD', goalsWithStatus: Array<{ goal: Goal, status: string|null, summary: CalendarService.getGoalSummaryStats() result }>"
@@ -39,10 +39,10 @@ var GOAL_COLOR_FAIL = '#d93025';
 
 function formatStatusLabel(status) {
   if (status === 'success') {
-    return 'Done ✅';
+    return '✅';
   }
   if (status === 'fail') {
-    return 'Missed ❌';
+    return '❌';
   }
   return '';
 }
