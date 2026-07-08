@@ -10,8 +10,8 @@
  *       output: "human readable label string, e.g. 'Done', 'Missed', 'Not set'"
  *     - step: 2
  *       call: "buildHomeCard(dateKey, goalsWithStatus)"
- *       input: "dateKey: 'YYYY-MM-DD', goalsWithStatus: Array<{ goal: Goal, status: string|null }>"
- *       output: "CardService.Card showing every goal for that day with Mark done/Mark missed/Clear buttons"
+ *       input: "dateKey: 'YYYY-MM-DD', goalsWithStatus: Array<{ goal: Goal, status: string|null, summary: CalendarService.getGoalSummaryStats() result }>"
+ *       output: "CardService.Card with today's goals (Mark done/Mark missed/Clear buttons) plus a read-only 'Goal summary' section (icon, duration, days left/done/missed per goal)"
  *     - step: 3
  *       call: "buildCreateGoalCard()"
  *       input: "none"
@@ -60,6 +60,19 @@ function formatWindowBadge(goal, dateKey) {
   return null;
 }
 
+function formatGoalSummaryLine(stats) {
+  var durationLabel = stats.durationDays !== null ? stats.durationDays + ' days' : '∞';
+  var daysLeftLabel = (stats.daysLeft !== null ? stats.daysLeft : '∞') + ' left';
+  return 'Duration: ' + durationLabel + '  ·  ' + daysLeftLabel + '  ·  ✅ ' + stats.daysDone + '  ·  ❌ ' + stats.daysMissed;
+}
+
+function buildGoalSummaryRowWidget(goal, stats) {
+  return CardService.newDecoratedText()
+    .setTopLabel(goal.icon + ' ' + goal.name)
+    .setText(formatGoalSummaryLine(stats))
+    .setWrapText(true);
+}
+
 function buildGoalRowWidget(goal, dateKey, status) {
   var successAction = CardService.newAction()
     .setFunctionName('handleMarkStatus')
@@ -95,7 +108,6 @@ function buildGoalRowWidget(goal, dateKey, status) {
   var buttonSet = CardService.newButtonSet()
     .addButton(
       CardService.newTextButton()
-        .setText('Mark done')
         .setMaterialIcon(CardService.newMaterialIcon().setName('check_circle'))
         .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
         .setBackgroundColor(GOAL_COLOR_SUCCESS)
@@ -103,7 +115,6 @@ function buildGoalRowWidget(goal, dateKey, status) {
     )
     .addButton(
       CardService.newTextButton()
-        .setText('Mark missed')
         .setMaterialIcon(CardService.newMaterialIcon().setName('cancel'))
         .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
         .setBackgroundColor(GOAL_COLOR_FAIL)
@@ -111,7 +122,6 @@ function buildGoalRowWidget(goal, dateKey, status) {
     )
     .addButton(
       CardService.newTextButton()
-        .setText('Clear')
         .setMaterialIcon(CardService.newMaterialIcon().setName('undo'))
         .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
         .setOnClickAction(clearAction)
@@ -133,6 +143,15 @@ function buildHomeCard(dateKey, goalsWithStatus) {
       var row = buildGoalRowWidget(entry.goal, dateKey, entry.status);
       goalsSection.addWidget(row.decoratedText);
       goalsSection.addWidget(row.buttonSet);
+    });
+  }
+
+  var summarySection = CardService.newCardSection().setHeader('Goal summary');
+  if (!goalsWithStatus || goalsWithStatus.length === 0) {
+    summarySection.addWidget(CardService.newTextParagraph().setText('No goals yet.'));
+  } else {
+    goalsWithStatus.forEach(function (entry) {
+      summarySection.addWidget(buildGoalSummaryRowWidget(entry.goal, entry.summary));
     });
   }
 
@@ -163,6 +182,7 @@ function buildHomeCard(dateKey, goalsWithStatus) {
   return CardService.newCardBuilder()
     .setHeader(header)
     .addSection(goalsSection)
+    .addSection(summarySection)
     .addSection(actionsSection)
     .build();
 }

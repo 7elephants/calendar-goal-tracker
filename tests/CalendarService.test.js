@@ -178,4 +178,134 @@ describe('CalendarService', function () {
       expect(CalendarService.getGoalWindowStatus(windowedGoal, '2026-07-31')).toBe('completed');
     });
   });
+
+  describe('daysBetweenDateKeys', function () {
+    it('counts whole days between two dateKeys', function () {
+      expect(CalendarService.daysBetweenDateKeys('2026-07-01', '2026-07-08')).toBe(7);
+    });
+
+    it('returns 0 for the same dateKey', function () {
+      expect(CalendarService.daysBetweenDateKeys('2026-07-08', '2026-07-08')).toBe(0);
+    });
+
+    it('rolls over a DST spring-forward boundary without an off-by-one', function () {
+      // US DST started 2026-03-08; a naive (to - from) / msPerDay would compute 0.958 days, not 1.
+      expect(CalendarService.daysBetweenDateKeys('2026-03-07', '2026-03-08')).toBe(1);
+    });
+  });
+
+  describe('getGoalStatusCounts', function () {
+    it('tallies success and fail events for a goal within range', function () {
+      CalendarService.setGoalStatus(goal, new Date(2026, 6, 1), 'success');
+      CalendarService.setGoalStatus(goal, new Date(2026, 6, 2), 'success');
+      CalendarService.setGoalStatus(goal, new Date(2026, 6, 3), 'fail');
+
+      var counts = CalendarService.getGoalStatusCounts(goal.id, '2026-07-01', '2026-07-08');
+      expect(counts).toEqual({ success: 2, fail: 1 });
+    });
+
+    it('ignores events for other goals', function () {
+      CalendarService.setGoalStatus(goal, new Date(2026, 6, 1), 'success');
+      CalendarService.setGoalStatus({ id: 'goal-2', name: 'Other', icon: '🧘' }, new Date(2026, 6, 1), 'fail');
+
+      var counts = CalendarService.getGoalStatusCounts(goal.id, '2026-07-01', '2026-07-08');
+      expect(counts).toEqual({ success: 1, fail: 0 });
+    });
+
+    it('paginates through multiple pages of results', function () {
+      var calls = 0;
+      // CalendarService.js reads `Calendar` as a global at call time, so
+      // swapping it here (without re-requiring the module) still takes effect.
+      global.Calendar = {
+        Events: {
+          list: jest.fn(function () {
+            calls++;
+            if (calls === 1) {
+              return {
+                items: [{ extendedProperties: { private: { status: 'success' } } }],
+                nextPageToken: 'page-2'
+              };
+            }
+            return { items: [{ extendedProperties: { private: { status: 'fail' } } }] };
+          })
+        }
+      };
+
+      var counts = CalendarService.getGoalStatusCounts('goal-1', '2026-07-01', '2026-08-01');
+      expect(counts).toEqual({ success: 1, fail: 1 });
+      expect(global.Calendar.Events.list).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('getGoalSummaryStats', function () {
+    it('reports durationDays/daysLeft and tallies within the window for a windowed goal', function () {
+      var windowedGoal = {
+        id: 'goal-1',
+        name: 'Run 3 miles',
+        icon: '🏃',
+        startDate: '2026-07-01',
+        durationDays: 30,
+        createdAt: '2026-07-01T00:00:00.000Z'
+      };
+      CalendarService.setGoalStatus(windowedGoal, new Date(2026, 6, 1), 'success');
+      CalendarService.setGoalStatus(windowedGoal, new Date(2026, 6, 2), 'fail');
+
+      var stats = CalendarService.getGoalSummaryStats(windowedGoal, '2026-07-08');
+      expect(stats.durationDays).toBe(30);
+      expect(stats.daysLeft).toBe(CalendarService.daysBetweenDateKeys('2026-07-08', '2026-07-31'));
+      expect(stats.daysDone).toBe(1);
+      expect(stats.daysMissed).toBe(1);
+    });
+
+    it('reports the full duration as daysLeft for a goal that has not started yet', function () {
+      var upcomingGoal = {
+        id: 'goal-1',
+        name: 'Run 3 miles',
+        icon: '🏃',
+        startDate: '2026-08-01',
+        durationDays: 30,
+        createdAt: '2026-07-01T00:00:00.000Z'
+      };
+      var stats = CalendarService.getGoalSummaryStats(upcomingGoal, '2026-07-08');
+      expect(stats.daysLeft).toBe(30);
+    });
+
+    it('clamps daysLeft to 0 once the window has ended', function () {
+      var endedGoal = {
+        id: 'goal-1',
+        name: 'Run 3 miles',
+        icon: '🏃',
+        startDate: '2026-01-01',
+        durationDays: 10,
+        createdAt: '2026-01-01T00:00:00.000Z'
+      };
+      var stats = CalendarService.getGoalSummaryStats(endedGoal, '2026-07-08');
+      expect(stats.daysLeft).toBe(0);
+    });
+
+    it('treats a goal with no durationDays as infinite (null) and counts from startDate through today', function () {
+      var foreverGoal = {
+        id: 'goal-1',
+        name: 'Meditate',
+        icon: '🧘',
+        startDate: '2026-01-01',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      };
+      CalendarService.setGoalStatus(foreverGoal, new Date(2026, 5, 1), 'success');
+
+      var stats = CalendarService.getGoalSummaryStats(foreverGoal, '2026-07-08');
+      expect(stats.durationDays).toBeNull();
+      expect(stats.daysLeft).toBeNull();
+      expect(stats.daysDone).toBe(1);
+    });
+
+    it('falls back to createdAt when even startDate is missing (goal predates that field too)', function () {
+      var veryOldGoal = { id: 'goal-1', name: 'Meditate', icon: '🧘', createdAt: '2026-01-01T00:00:00.000Z' };
+      CalendarService.setGoalStatus(veryOldGoal, new Date(2026, 5, 1), 'fail');
+
+      var stats = CalendarService.getGoalSummaryStats(veryOldGoal, '2026-07-08');
+      expect(stats.durationDays).toBeNull();
+      expect(stats.daysMissed).toBe(1);
+    });
+  });
 });

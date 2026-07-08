@@ -32,6 +32,10 @@
  *       call: "getGoalWindowStatus(goal, dateKey)"
  *       input: "goal: Goal (with optional startDate/durationDays), dateKey: 'YYYY-MM-DD'"
  *       output: "'upcoming' | 'active' | 'completed' | null (null for goals with no stored startDate/durationDays, e.g. created before this feature)"
+ *     - step: 8
+ *       call: "getGoalSummaryStats(goal, todayDateKey)"
+ *       input: "goal: Goal, todayDateKey: 'YYYY-MM-DD'"
+ *       output: "{ durationDays, daysLeft, daysDone, daysMissed } for the homepage summary section; durationDays/daysLeft are null (rendered as infinite) for goals with no stored durationDays. Internally paginates Calendar.Events.list via getGoalStatusCounts()."
  * ---
  */
 
@@ -56,6 +60,19 @@ function addDaysToDateKey(dateKey, days) {
   var d = new Date(parts[0], parts[1] - 1, parts[2]);
   d.setDate(d.getDate() + days);
   return getDateKey(d);
+}
+
+/**
+ * Whole calendar days between two dateKeys (toDateKeyExclusive - fromDateKey).
+ * Pure function; Math.round (not floor) absorbs the +/-1hr DST days can have
+ * when represented as local midnight Date objects.
+ */
+function daysBetweenDateKeys(fromDateKey, toDateKeyExclusive) {
+  var fromParts = fromDateKey.split('-').map(Number);
+  var toParts = toDateKeyExclusive.split('-').map(Number);
+  var fromDate = new Date(fromParts[0], fromParts[1] - 1, fromParts[2]);
+  var toDate = new Date(toParts[0], toParts[1] - 1, toParts[2]);
+  return Math.round((toDate - fromDate) / (24 * 60 * 60 * 1000));
 }
 
 /**
@@ -177,6 +194,69 @@ function getGoalWindowStatus(goal, dateKey) {
   return 'completed';
 }
 
+/**
+ * Tallies success/fail status events for a goal within [fromDateKey,
+ * toDateKeyExclusive), paginating through Calendar.Events.list since a
+ * long-running goal can have more results than one page returns.
+ */
+function getGoalStatusCounts(goalId, fromDateKey, toDateKeyExclusive) {
+  var counts = { success: 0, fail: 0 };
+  var pageToken;
+  do {
+    var response = Calendar.Events.list(CALENDAR_ID, {
+      privateExtendedProperty: ['app=' + APP_TAG, 'goalId=' + goalId],
+      singleEvents: true,
+      timeMin: new Date(dateKeyToUtcMs(fromDateKey)).toISOString(),
+      timeMax: new Date(dateKeyToUtcMs(toDateKeyExclusive)).toISOString(),
+      maxResults: 2500,
+      pageToken: pageToken
+    });
+    (response.items || []).forEach(function (event) {
+      var status = event.extendedProperties && event.extendedProperties.private && event.extendedProperties.private.status;
+      if (status === 'success') {
+        counts.success++;
+      } else if (status === 'fail') {
+        counts.fail++;
+      }
+    });
+    pageToken = response.nextPageToken;
+  } while (pageToken);
+  return counts;
+}
+
+/**
+ * Lifetime summary stats for a goal, used by the homepage summary section.
+ * Goals with a stored startDate+durationDays report durationDays/daysLeft
+ * (daysLeft clamped to >=0, counted from whichever is later: today or the
+ * goal's start). Goals with no stored durationDays (only possible for goals
+ * created before that field existed) are treated as running forever:
+ * durationDays/daysLeft come back null (the caller renders that as "∞"),
+ * and daysDone/daysMissed are tallied from startDate (or createdAt, for
+ * goals that predate startDate too) through today.
+ */
+function getGoalSummaryStats(goal, todayDateKey) {
+  var hasWindow = !!(goal.startDate && goal.durationDays);
+  var rangeStart = goal.startDate || getDateKey(new Date(goal.createdAt));
+  var rangeEndExclusive = hasWindow
+    ? addDaysToDateKey(goal.startDate, goal.durationDays)
+    : addDaysToDateKey(todayDateKey, 1);
+
+  var counts = getGoalStatusCounts(goal.id, rangeStart, rangeEndExclusive);
+
+  var daysLeft = null;
+  if (hasWindow) {
+    var from = todayDateKey > rangeStart ? todayDateKey : rangeStart;
+    daysLeft = Math.max(0, daysBetweenDateKeys(from, rangeEndExclusive));
+  }
+
+  return {
+    durationDays: hasWindow ? goal.durationDays : null,
+    daysLeft: daysLeft,
+    daysDone: counts.success,
+    daysMissed: counts.fail
+  };
+}
+
 // eslint-disable-next-line no-undef
 if (typeof module !== 'undefined') {
   module.exports = {
@@ -190,6 +270,9 @@ if (typeof module !== 'undefined') {
     setGoalStatus: setGoalStatus,
     getGoalStatusForDate: getGoalStatusForDate,
     getGoalWindowStatus: getGoalWindowStatus,
+    daysBetweenDateKeys: daysBetweenDateKeys,
+    getGoalStatusCounts: getGoalStatusCounts,
+    getGoalSummaryStats: getGoalSummaryStats,
     CALENDAR_ID: CALENDAR_ID,
     APP_TAG: APP_TAG
   };

@@ -25,6 +25,12 @@ check.
   informational: outside that window the goal shows a badge ("Starts ..." /
   "🏁 Completed") on the home card, but the Mark done / Mark missed / Clear
   buttons still work on any day regardless of the window.
+- A **Goal summary** section below today's goals lists every active goal —
+  icon, duration, days left, and running ✅ done / ❌ missed counts — always
+  relative to today regardless of which day you're viewing via Choose day.
+  Goals with no stored duration (only possible for goals created before that
+  field existed) show "∞" for duration/days left and count done/missed from
+  their start date (or creation date) through today.
 - Deleting a goal only stops future tracking; it does **not** delete past
   calendar events, so your history stays intact.
 
@@ -111,4 +117,6 @@ covered by the manual test plan below instead.
 - [ ] Submit the "New goal" form with a duration of 0 or blank; confirm a validation error notification appears.
 - [ ] Create a goal with a start date in the future; confirm the home card shows a "Starts ..." badge and Mark done/Mark missed still work.
 - [ ] Create a goal with a past start date and a short duration so the window has already elapsed; confirm a "🏁 Completed" badge appears and Mark done/Mark missed still work.
+- [ ] In the Goal summary section, confirm each goal shows the right icon, duration, days left, and done/missed counts; mark a few days done/missed and confirm the counts update after reopening the add-on.
+- [ ] Confirm the Goal summary numbers don't change when you use "Choose day" to view a different day (they should stay pinned to today).
 - [ ] Reload Calendar entirely and reopen the add-on; confirm goals and today's statuses persist (PropertiesService + Calendar are both durable).

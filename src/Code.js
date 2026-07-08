@@ -7,7 +7,7 @@
  *     - step: 1
  *       call: "onHomepage(e)"
  *       input: "Calendar add-on event object (Apps Script runtime callback)"
- *       output: "CardService.Card for today, built from GoalService.listGoals() + CalendarService.getGoalStatusForDate(); falls back to Cards.buildErrorCard() if the Calendar API call fails"
+ *       output: "CardService.Card for today, built from GoalService.listGoals() + CalendarService.getGoalStatusForDate() + CalendarService.getGoalSummaryStats(); falls back to Cards.buildErrorCard() if the Calendar API call fails"
  *     - step: 2
  *       call: "onCalendarEventOpen(e)"
  *       input: "Calendar add-on event object with e.calendar.id and the opened event"
@@ -51,9 +51,14 @@ function buildHomeCardForDate_(dateKey) {
     return g.active !== false;
   });
   var date = dateKeyToDate_(dateKey);
+  var today = todayDateKey_();
 
   var goalsWithStatus = goals.map(function (goal) {
-    return { goal: goal, status: getGoalStatusForDate(goal.id, date) };
+    return {
+      goal: goal,
+      status: getGoalStatusForDate(goal.id, date),
+      summary: getGoalSummaryStats(goal, today)
+    };
   });
 
   return buildHomeCard(dateKey, goalsWithStatus);
