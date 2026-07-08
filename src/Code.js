@@ -19,7 +19,7 @@
  *     - step: 4
  *       call: "handleOpenCreateGoalCard(e) / handleCreateGoalSubmit(e) / handleOpenDatePickerCard(e) / handleGoToDate(e) / handleDeleteGoal(e)"
  *       input: "varies: e.parameters or e.formInput depending on the widget that triggered the action"
- *       output: "ActionResponse that either pushes a new card or updates the current card. handleGoToDate and handleCreateGoalSubmit both parse a DatePicker's UTC epoch-ms value with CalendarService.utcMsToDateKey (not getDateKey, which is local-time) to avoid an off-by-one-day bug, and both fall back to todayDateKey_() when the DatePicker's value is absent from e.formInput (observed when the user never opens the picker to interact with a pre-filled default)."
+ *       output: "ActionResponse that either pushes a new card or updates the current card. handleGoToDate and handleCreateGoalSubmit both read their DatePicker value via datePickerValueToDateKey_(), which handles e.formInput delivering either a raw epoch-ms string (per Google's docs) or a { msSinceEpoch } object (observed live in this runtime), then converts with CalendarService.utcMsToDateKey (not getDateKey, which is local-time) to avoid an off-by-one-day bug; both fall back to todayDateKey_() when no usable value is present."
  * ---
  */
 
@@ -30,6 +30,20 @@ function todayDateKey_() {
 function dateKeyToDate_(dateKey) {
   var parts = dateKey.split('-').map(Number);
   return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+/**
+ * A DatePicker's e.formInput value is documented as a plain epoch-ms string,
+ * but in practice (Calendar add-on runtime, observed live) it arrives as
+ * { msSinceEpoch: number }. Handle both shapes rather than trust the docs.
+ * Returns a dateKey ('YYYY-MM-DD'), or null if no usable value was found.
+ */
+function datePickerValueToDateKey_(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  var ms = typeof value === 'object' ? Number(value.msSinceEpoch) : Number(value);
+  return isNaN(ms) ? null : utcMsToDateKey(ms);
 }
 
 function buildHomeCardForDate_(dateKey) {
@@ -108,7 +122,7 @@ function handleOpenCreateGoalCard(e) {
 
 function handleCreateGoalSubmit(e) {
   var formInput = e.formInput || {};
-  var startDate = formInput.goalStartDate ? utcMsToDateKey(Number(formInput.goalStartDate)) : todayDateKey_();
+  var startDate = datePickerValueToDateKey_(formInput.goalStartDate) || todayDateKey_();
   var durationDays = formInput.goalDurationDays ? Number(formInput.goalDurationDays) : undefined;
   try {
     createGoal({
@@ -140,8 +154,7 @@ function handleOpenDatePickerCard(e) {
 
 function handleGoToDate(e) {
   var formInput = e.formInput || {};
-  var msString = formInput.selectedDate;
-  var dateKey = msString ? utcMsToDateKey(Number(msString)) : todayDateKey_();
+  var dateKey = datePickerValueToDateKey_(formInput.selectedDate) || todayDateKey_();
 
   var updatedCard = buildHomeCardOrErrorCard_(dateKey);
   return CardService.newActionResponseBuilder()
