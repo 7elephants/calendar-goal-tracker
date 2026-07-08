@@ -17,6 +17,6 @@ describe('Cards.formatStatusLabel', function () {
   });
 
   it('labels a null status as not set', function () {
-    expect(Cards.formatStatusLabel(null)).toBe('Not set');
+    expect(Cards.formatStatusLabel(null)).toBe('');
   });
 });

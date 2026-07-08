@@ -7,25 +7,31 @@
  *     - step: 1
  *       call: "formatStatusLabel(status)"
  *       input: "'success' | 'fail' | null"
- *       output: "human readable label string, e.g. 'Done', 'Missed', 'Not set'"
+ *       output: "human readable label string, e.g. 'Done', 'Missed', ''"
  *     - step: 2
  *       call: "buildHomeCard(dateKey, goalsWithStatus)"
- *       input: "dateKey: 'YYYY-MM-DD', goalsWithStatus: Array<{ goal: Goal, status: string|null }>"
- *       output: "CardService.Card showing every goal for that day with Success/Fail/Clear buttons"
+ *       input: "dateKey: 'YYYY-MM-DD', goalsWithStatus: Array<{ goal: Goal, status: string|null, summary: CalendarService.getGoalSummaryStats() result }>"
+ *       output: "CardService.Card with no CardHeader (title is required by CardHeader so an empty one is unsafe; the add-on's own name in Calendar's chrome already labels the card). First widget is a date-nav row (chevron_left/chevron_right call handleShiftDay to move +/-1 day in place; the date label between them calls handleOpenDatePickerCard). Then today's goals (Mark done/Mark missed/Clear buttons), a read-only 'Goal summary' section (icon, duration, days left/done/missed per goal), and a Create goal action."
  *     - step: 3
  *       call: "buildCreateGoalCard()"
  *       input: "none"
- *       output: "CardService.Card with name + icon TextInputs and a submit button"
+ *       output: "CardService.Card with name/icon TextInputs, a start-date DatePicker (defaulted to today), a duration-in-days TextInput, and a submit button"
  *     - step: 4
  *       call: "buildDatePickerCard(dateKey)"
  *       input: "dateKey: 'YYYY-MM-DD' currently selected"
- *       output: "CardService.Card with a DatePicker widget (seeded via CalendarService.dateKeyToUtcMs, since the widget is UTC-based) and a 'Go' button"
+ *       output: "CardService.Card with a DatePicker widget (seeded via CalendarService.dateKeyToUtcMs, since the widget is UTC-based) and a 'Go to day' button"
  *     - step: 5
  *       call: "buildErrorCard(message)"
  *       input: "message: string"
  *       output: "CardService.Card shown in place of the home card when a Calendar API call fails, so a backend error never surfaces as a raw crash"
  * ---
  */
+
+// Matches the primaryColor/secondaryColor declared in appsscript.json plus
+// Google's standard Material red for the negative/destructive action.
+var GOAL_COLOR_PRIMARY = '#1a73e8';
+var GOAL_COLOR_SUCCESS = '#188038';
+var GOAL_COLOR_FAIL = '#d93025';
 
 function formatStatusLabel(status) {
   if (status === 'success') {
@@ -34,7 +40,7 @@ function formatStatusLabel(status) {
   if (status === 'fail') {
     return 'Missed ❌';
   }
-  return 'Not set';
+  return '';
 }
 
 function formatDisplayDate(dateKey) {
@@ -43,12 +49,66 @@ function formatDisplayDate(dateKey) {
   return Utilities.formatDate(d, Session.getScriptTimeZone(), 'EEEE, MMMM d, yyyy');
 }
 
-function buildGoalRowWidget(goal, dateKey, status) {
-  var decoratedText = CardService.newDecoratedText()
-    .setTopLabel(goal.icon + ' ' + goal.name)
-    .setText(formatStatusLabel(status))
-    .setWrapText(true);
+function formatWindowBadge(goal, dateKey) {
+  var windowStatus = getGoalWindowStatus(goal, dateKey);
+  if (windowStatus === 'upcoming') {
+    return 'Starts ' + formatDisplayDate(goal.startDate);
+  }
+  if (windowStatus === 'completed') {
+    return '🏁 Completed (' + goal.durationDays + '-day goal)';
+  }
+  return null;
+}
 
+function formatGoalSummaryLine(stats) {
+  var durationLabel = stats.durationDays !== null ? stats.durationDays + ' days' : '∞';
+  var daysLeftLabel = (stats.daysLeft !== null ? stats.daysLeft : '∞') + ' left';
+  return 'Duration: ' + durationLabel + '  ·  ' + daysLeftLabel + '  ·  ✅ ' + stats.daysDone + '  ·  ❌ ' + stats.daysMissed;
+}
+
+function buildGoalSummaryRowWidget(goal, stats) {
+  return CardService.newDecoratedText()
+    .setTopLabel(goal.icon + ' ' + goal.name)
+    .setText(formatGoalSummaryLine(stats))
+    .setWrapText(true);
+}
+
+function buildDateNavRowWidget(dateKey) {
+  var prevAction = CardService.newAction()
+    .setFunctionName('handleShiftDay')
+    .setParameters({ dateKey: dateKey, days: '-1' });
+  var nextAction = CardService.newAction()
+    .setFunctionName('handleShiftDay')
+    .setParameters({ dateKey: dateKey, days: '1' });
+  var pickDateAction = CardService.newAction()
+    .setFunctionName('handleOpenDatePickerCard')
+    .setParameters({ dateKey: dateKey });
+
+  return CardService.newButtonSet()
+    .addButton(
+      CardService.newTextButton()
+        .setAltText('Previous day')
+        .setMaterialIcon(CardService.newMaterialIcon().setName('chevron_left'))
+        .setTextButtonStyle(CardService.TextButtonStyle.BORDERLESS)
+        .setOnClickAction(prevAction)
+    )
+    .addButton(
+      CardService.newTextButton()
+        .setText(formatDisplayDate(dateKey))
+        .setAltText('Choose a day')
+        .setTextButtonStyle(CardService.TextButtonStyle.BORDERLESS)
+        .setOnClickAction(pickDateAction)
+    )
+    .addButton(
+      CardService.newTextButton()
+        .setAltText('Next day')
+        .setMaterialIcon(CardService.newMaterialIcon().setName('chevron_right'))
+        .setTextButtonStyle(CardService.TextButtonStyle.BORDERLESS)
+        .setOnClickAction(nextAction)
+    );
+}
+
+function buildGoalRowWidget(goal, dateKey, status) {
   var successAction = CardService.newAction()
     .setFunctionName('handleMarkStatus')
     .setParameters({ goalId: goal.id, dateKey: dateKey, status: 'success' });
@@ -62,19 +122,51 @@ function buildGoalRowWidget(goal, dateKey, status) {
     .setFunctionName('handleDeleteGoal')
     .setParameters({ goalId: goal.id });
 
+  var deleteButton = CardService.newTextButton()
+    .setText('Delete')
+    .setAltText('Delete goal')
+    .setMaterialIcon(CardService.newMaterialIcon().setName('delete'))
+    .setTextButtonStyle(CardService.TextButtonStyle.BORDERLESS)
+    .setOnClickAction(deleteAction);
+
+  var decoratedText = CardService.newDecoratedText()
+    .setTopLabel(goal.icon + ' ' + goal.name)
+    .setText(formatStatusLabel(status))
+    .setWrapText(true)
+    .setButton(deleteButton);
+
+  var windowBadge = formatWindowBadge(goal, dateKey);
+  if (windowBadge) {
+    decoratedText.setBottomLabel(windowBadge);
+  }
+
   var buttonSet = CardService.newButtonSet()
-    .addButton(CardService.newTextButton().setText('✅ Success').setOnClickAction(successAction))
-    .addButton(CardService.newTextButton().setText('❌ Fail').setOnClickAction(failAction))
-    .addButton(CardService.newTextButton().setText('Clear').setOnClickAction(clearAction))
-    .addButton(CardService.newTextButton().setText('Delete goal').setOnClickAction(deleteAction));
+    .addButton(
+      CardService.newTextButton()
+        .setMaterialIcon(CardService.newMaterialIcon().setName('check_circle'))
+        .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+        .setBackgroundColor(GOAL_COLOR_SUCCESS)
+        .setOnClickAction(successAction)
+    )
+    .addButton(
+      CardService.newTextButton()
+        .setMaterialIcon(CardService.newMaterialIcon().setName('cancel'))
+        .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+        .setBackgroundColor(GOAL_COLOR_FAIL)
+        .setOnClickAction(failAction)
+    )
+    .addButton(
+      CardService.newTextButton()
+        .setMaterialIcon(CardService.newMaterialIcon().setName('undo'))
+        .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
+        .setOnClickAction(clearAction)
+    );
 
   return { decoratedText: decoratedText, buttonSet: buttonSet };
 }
 
 function buildHomeCard(dateKey, goalsWithStatus) {
-  var header = CardService.newCardHeader()
-    .setTitle('Goals & Habits')
-    .setSubtitle(formatDisplayDate(dateKey));
+  var navSection = CardService.newCardSection().addWidget(buildDateNavRowWidget(dateKey));
 
   var goalsSection = CardService.newCardSection().setHeader('Today’s goals');
   if (!goalsWithStatus || goalsWithStatus.length === 0) {
@@ -87,20 +179,32 @@ function buildHomeCard(dateKey, goalsWithStatus) {
     });
   }
 
+  var summarySection = CardService.newCardSection().setHeader('Goal summary');
+  if (!goalsWithStatus || goalsWithStatus.length === 0) {
+    summarySection.addWidget(CardService.newTextParagraph().setText('No goals yet.'));
+  } else {
+    goalsWithStatus.forEach(function (entry) {
+      summarySection.addWidget(buildGoalSummaryRowWidget(entry.goal, entry.summary));
+    });
+  }
+
   var actionsSection = CardService.newCardSection();
   var newGoalAction = CardService.newAction().setFunctionName('handleOpenCreateGoalCard');
-  var pickDateAction = CardService.newAction()
-    .setFunctionName('handleOpenDatePickerCard')
-    .setParameters({ dateKey: dateKey });
   actionsSection.addWidget(
-    CardService.newButtonSet()
-      .addButton(CardService.newTextButton().setText('+ New goal').setOnClickAction(newGoalAction))
-      .addButton(CardService.newTextButton().setText('📅 Choose day').setOnClickAction(pickDateAction))
+    CardService.newButtonSet().addButton(
+      CardService.newTextButton()
+        .setText('Create goal')
+        .setMaterialIcon(CardService.newMaterialIcon().setName('add'))
+        .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+        .setBackgroundColor(GOAL_COLOR_PRIMARY)
+        .setOnClickAction(newGoalAction)
+    )
   );
 
   return CardService.newCardBuilder()
-    .setHeader(header)
+    .addSection(navSection)
     .addSection(goalsSection)
+    .addSection(summarySection)
     .addSection(actionsSection)
     .build();
 }
@@ -116,15 +220,28 @@ function buildCreateGoalCard() {
     .setFieldName('goalIcon')
     .setTitle('Icon / emoji')
     .setHint('e.g. 🏃');
+  var startDateInput = CardService.newDatePicker()
+    .setFieldName('goalStartDate')
+    .setTitle('Start date')
+    .setValueInMsSinceEpoch(dateKeyToUtcMs(getDateKey(new Date())));
+  var durationInput = CardService.newTextInput()
+    .setFieldName('goalDurationDays')
+    .setTitle('Duration (days)')
+    .setHint('e.g. 30');
 
   var submitAction = CardService.newAction().setFunctionName('handleCreateGoalSubmit');
   var submitButton = CardService.newTextButton()
     .setText('Create goal')
+    .setMaterialIcon(CardService.newMaterialIcon().setName('add'))
+    .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+    .setBackgroundColor(GOAL_COLOR_PRIMARY)
     .setOnClickAction(submitAction);
 
   var section = CardService.newCardSection()
     .addWidget(nameInput)
     .addWidget(iconInput)
+    .addWidget(startDateInput)
+    .addWidget(durationInput)
     .addWidget(submitButton);
 
   return CardService.newCardBuilder().setHeader(header).addSection(section).build();
@@ -138,7 +255,12 @@ function buildDatePickerCard(dateKey) {
     .setValueInMsSinceEpoch(dateKeyToUtcMs(dateKey));
 
   var goAction = CardService.newAction().setFunctionName('handleGoToDate');
-  var goButton = CardService.newTextButton().setText('Go').setOnClickAction(goAction);
+  var goButton = CardService.newTextButton()
+    .setText('Go to day')
+    .setMaterialIcon(CardService.newMaterialIcon().setName('arrow_forward'))
+    .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+    .setBackgroundColor(GOAL_COLOR_PRIMARY)
+    .setOnClickAction(goAction);
 
   var section = CardService.newCardSection().addWidget(datePicker).addWidget(goButton);
 
