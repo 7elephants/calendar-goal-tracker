@@ -7,7 +7,7 @@
  *     - step: 1
  *       call: "formatStatusLabel(status)"
  *       input: "'success' | 'fail' | null"
- *       output: "human readable label string, e.g. 'Done', 'Missed', 'Not set'"
+ *       output: "human readable label string, e.g. 'Done', 'Missed', ''"
  *     - step: 2
  *       call: "buildHomeCard(dateKey, goalsWithStatus)"
  *       input: "dateKey: 'YYYY-MM-DD', goalsWithStatus: Array<{ goal: Goal, status: string|null, summary: CalendarService.getGoalSummaryStats() result }>"
@@ -40,7 +40,7 @@ function formatStatusLabel(status) {
   if (status === 'fail') {
     return 'Missed ❌';
   }
-  return 'Not set';
+  return '';
 }
 
 function formatDisplayDate(dateKey) {
