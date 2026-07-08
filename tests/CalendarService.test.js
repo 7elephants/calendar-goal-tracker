@@ -154,4 +154,28 @@ describe('CalendarService', function () {
       expect(CalendarService.getGoalStatusForDate(goal.id, new Date(2026, 0, 5))).toBeNull();
     });
   });
+
+  describe('getGoalWindowStatus', function () {
+    var windowedGoal = { id: 'goal-1', name: 'Run 3 miles', icon: '🏃', startDate: '2026-07-01', durationDays: 30 };
+
+    it('returns null for a goal with no startDate/durationDays (created before this feature)', function () {
+      expect(CalendarService.getGoalWindowStatus(goal, '2026-07-08')).toBeNull();
+    });
+
+    it('returns "upcoming" before the start date', function () {
+      expect(CalendarService.getGoalWindowStatus(windowedGoal, '2026-06-30')).toBe('upcoming');
+    });
+
+    it('returns "active" on the start date', function () {
+      expect(CalendarService.getGoalWindowStatus(windowedGoal, '2026-07-01')).toBe('active');
+    });
+
+    it('returns "active" on the last day of the window', function () {
+      expect(CalendarService.getGoalWindowStatus(windowedGoal, '2026-07-30')).toBe('active');
+    });
+
+    it('returns "completed" the day after the window ends', function () {
+      expect(CalendarService.getGoalWindowStatus(windowedGoal, '2026-07-31')).toBe('completed');
+    });
+  });
 });

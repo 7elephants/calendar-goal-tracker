@@ -16,6 +16,10 @@ function makeUserPropertiesMock() {
   };
 }
 
+function validGoalInput(overrides) {
+  return Object.assign({ name: 'Run', icon: '🏃', startDate: '2026-07-08', durationDays: 30 }, overrides);
+}
+
 describe('GoalService', function () {
   var GoalService;
   var userProps;
@@ -49,39 +53,75 @@ describe('GoalService', function () {
   describe('validateGoalInput', function () {
     it('throws when name is missing', function () {
       expect(function () {
-        GoalService.validateGoalInput({ name: '  ', icon: '🏃' });
+        GoalService.validateGoalInput(validGoalInput({ name: '  ' }));
       }).toThrow('Goal name is required.');
     });
 
     it('throws when icon is missing', function () {
       expect(function () {
-        GoalService.validateGoalInput({ name: 'Run', icon: '' });
+        GoalService.validateGoalInput(validGoalInput({ icon: '' }));
       }).toThrow('Goal icon');
     });
 
     it('throws when name exceeds 60 characters', function () {
       expect(function () {
-        GoalService.validateGoalInput({ name: 'x'.repeat(61), icon: '🏃' });
+        GoalService.validateGoalInput(validGoalInput({ name: 'x'.repeat(61) }));
       }).toThrow('60 characters');
     });
 
     it('throws when icon exceeds 4 characters', function () {
       expect(function () {
-        GoalService.validateGoalInput({ name: 'Run', icon: 'toolong' });
+        GoalService.validateGoalInput(validGoalInput({ icon: 'toolong' }));
       }).toThrow('4 characters');
     });
 
     it('accepts valid input without throwing', function () {
       expect(function () {
-        GoalService.validateGoalInput({ name: 'Run', icon: '🏃' });
+        GoalService.validateGoalInput(validGoalInput());
       }).not.toThrow();
     });
 
     it('accepts a compound ZWJ emoji even though it is >4 UTF-16 units', function () {
       // "person running: female sign" = runner + ZWJ + female sign + VS16 = 4 code points, 7 UTF-16 units
       expect(function () {
-        GoalService.validateGoalInput({ name: 'Run', icon: '🏃‍♀️' });
+        GoalService.validateGoalInput(validGoalInput({ icon: '🏃‍♀️' }));
       }).not.toThrow();
+    });
+
+    it('throws when startDate is missing', function () {
+      expect(function () {
+        GoalService.validateGoalInput(validGoalInput({ startDate: undefined }));
+      }).toThrow('valid start date is required');
+    });
+
+    it('throws when startDate is not a real calendar date', function () {
+      expect(function () {
+        GoalService.validateGoalInput(validGoalInput({ startDate: '2026-02-30' }));
+      }).toThrow('valid start date is required');
+    });
+
+    it('throws when durationDays is missing', function () {
+      expect(function () {
+        GoalService.validateGoalInput(validGoalInput({ durationDays: undefined }));
+      }).toThrow('Duration must be');
+    });
+
+    it('throws when durationDays is not a whole number', function () {
+      expect(function () {
+        GoalService.validateGoalInput(validGoalInput({ durationDays: 2.5 }));
+      }).toThrow('Duration must be');
+    });
+
+    it('throws when durationDays is zero or negative', function () {
+      expect(function () {
+        GoalService.validateGoalInput(validGoalInput({ durationDays: 0 }));
+      }).toThrow('Duration must be');
+    });
+
+    it('throws when durationDays exceeds the maximum', function () {
+      expect(function () {
+        GoalService.validateGoalInput(validGoalInput({ durationDays: 3651 }));
+      }).toThrow('Duration must be');
     });
   });
 
@@ -98,18 +138,20 @@ describe('GoalService', function () {
 
   describe('createGoal', function () {
     it('creates and persists a new goal with a generated id', function () {
-      var goal = GoalService.createGoal({ name: 'Run 3 miles', icon: '🏃' });
+      var goal = GoalService.createGoal(validGoalInput({ name: 'Run 3 miles', icon: '🏃' }));
 
       expect(goal.id).toBe('uuid-1');
       expect(goal.name).toBe('Run 3 miles');
       expect(goal.icon).toBe('🏃');
+      expect(goal.startDate).toBe('2026-07-08');
+      expect(goal.durationDays).toBe(30);
       expect(goal.active).toBe(true);
       expect(GoalService.listGoals()).toHaveLength(1);
     });
 
     it('rejects invalid input before touching storage', function () {
       expect(function () {
-        GoalService.createGoal({ name: '', icon: '🏃' });
+        GoalService.createGoal(validGoalInput({ name: '' }));
       }).toThrow('Goal name is required.');
       expect(GoalService.listGoals()).toHaveLength(0);
     });
@@ -117,7 +159,7 @@ describe('GoalService', function () {
 
   describe('getGoal', function () {
     it('finds a goal by id', function () {
-      var created = GoalService.createGoal({ name: 'Meditate', icon: '🧘' });
+      var created = GoalService.createGoal(validGoalInput({ name: 'Meditate', icon: '🧘' }));
       expect(GoalService.getGoal(created.id)).toEqual(created);
     });
 
@@ -128,12 +170,20 @@ describe('GoalService', function () {
 
   describe('updateGoal', function () {
     it('updates name, icon, and active flag', function () {
-      var created = GoalService.createGoal({ name: 'Meditate', icon: '🧘' });
+      var created = GoalService.createGoal(validGoalInput({ name: 'Meditate', icon: '🧘' }));
       var updated = GoalService.updateGoal(created.id, { name: 'Meditate daily', active: false });
 
       expect(updated.name).toBe('Meditate daily');
       expect(updated.icon).toBe('🧘');
       expect(updated.active).toBe(false);
+    });
+
+    it('updates startDate and durationDays', function () {
+      var created = GoalService.createGoal(validGoalInput({ name: 'Meditate', icon: '🧘' }));
+      var updated = GoalService.updateGoal(created.id, { startDate: '2026-08-01', durationDays: 60 });
+
+      expect(updated.startDate).toBe('2026-08-01');
+      expect(updated.durationDays).toBe(60);
     });
 
     it('throws for an unknown goal id', function () {
@@ -143,7 +193,7 @@ describe('GoalService', function () {
     });
 
     it('re-validates the merged goal, rejecting a blank name', function () {
-      var created = GoalService.createGoal({ name: 'Meditate', icon: '🧘' });
+      var created = GoalService.createGoal(validGoalInput({ name: 'Meditate', icon: '🧘' }));
       expect(function () {
         GoalService.updateGoal(created.id, { name: '   ' });
       }).toThrow('Goal name is required.');
@@ -152,7 +202,7 @@ describe('GoalService', function () {
 
   describe('deleteGoal', function () {
     it('removes an existing goal and returns true', function () {
-      var created = GoalService.createGoal({ name: 'Meditate', icon: '🧘' });
+      var created = GoalService.createGoal(validGoalInput({ name: 'Meditate', icon: '🧘' }));
       expect(GoalService.deleteGoal(created.id)).toBe(true);
       expect(GoalService.listGoals()).toHaveLength(0);
     });

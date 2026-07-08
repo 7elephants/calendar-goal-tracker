@@ -28,6 +28,10 @@
  *       call: "dateKeyToUtcMs(dateKey) / utcMsToDateKey(ms)"
  *       input: "'YYYY-MM-DD' string, or epoch ms"
  *       output: "the inverse value. Used only for the CardService DatePicker round trip, which is UTC-based regardless of the script's timezone (see Cards.js/Code.js) — kept separate from getDateKey (local time) to avoid an off-by-one-day bug."
+ *     - step: 7
+ *       call: "getGoalWindowStatus(goal, dateKey)"
+ *       input: "goal: Goal (with optional startDate/durationDays), dateKey: 'YYYY-MM-DD'"
+ *       output: "'upcoming' | 'active' | 'completed' | null (null for goals with no stored startDate/durationDays, e.g. created before this feature)"
  * ---
  */
 
@@ -152,6 +156,27 @@ function getGoalStatusForDate(goalId, date) {
   return event.extendedProperties.private.status || null;
 }
 
+/**
+ * Where dateKey falls relative to a goal's [startDate, startDate + durationDays)
+ * window. Returns null for goals created before start date/duration existed
+ * (no startDate or durationDays stored) so legacy goals never show a badge.
+ * dateKey strings compare correctly with plain '<' since 'YYYY-MM-DD' sorts
+ * lexicographically the same as chronologically.
+ */
+function getGoalWindowStatus(goal, dateKey) {
+  if (!goal || !goal.startDate || !goal.durationDays) {
+    return null;
+  }
+  if (dateKey < goal.startDate) {
+    return 'upcoming';
+  }
+  var endDateKeyExclusive = addDaysToDateKey(goal.startDate, goal.durationDays);
+  if (dateKey < endDateKeyExclusive) {
+    return 'active';
+  }
+  return 'completed';
+}
+
 // eslint-disable-next-line no-undef
 if (typeof module !== 'undefined') {
   module.exports = {
@@ -164,6 +189,7 @@ if (typeof module !== 'undefined') {
     findEventForGoalOnDate: findEventForGoalOnDate,
     setGoalStatus: setGoalStatus,
     getGoalStatusForDate: getGoalStatusForDate,
+    getGoalWindowStatus: getGoalWindowStatus,
     CALENDAR_ID: CALENDAR_ID,
     APP_TAG: APP_TAG
   };

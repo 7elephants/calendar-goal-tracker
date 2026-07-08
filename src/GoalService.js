@@ -6,7 +6,7 @@
  *   steps:
  *     - step: 1
  *       call: "validateGoalInput(input)"
- *       input: "{ name: string, icon: string }"
+ *       input: "{ name: string, icon: string, startDate: 'YYYY-MM-DD', durationDays: integer }"
  *       output: "throws Error on invalid input, otherwise returns void"
  *     - step: 2
  *       call: "listGoals()"
@@ -14,7 +14,7 @@
  *       output: "Array<Goal> read from PropertiesService.getUserProperties()"
  *     - step: 3
  *       call: "createGoal(input)"
- *       input: "{ name: string, icon: string }"
+ *       input: "{ name: string, icon: string, startDate: 'YYYY-MM-DD', durationDays: integer }"
  *       output: "newly created Goal object, persisted to user properties"
  *     - step: 4
  *       call: "updateGoal(goalId, updates)"
@@ -28,6 +28,22 @@
  */
 
 var GOALS_PROPERTY_KEY = 'GOALS_V1';
+var MAX_DURATION_DAYS = 3650;
+var DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * True if dateKey is both shaped like YYYY-MM-DD and a real calendar date
+ * (rejects e.g. 2026-02-30). Kept dependency-free (no Apps Script Utilities)
+ * so validateGoalInput stays unit-testable without mocks.
+ */
+function isValidDateKey(dateKey) {
+  if (typeof dateKey !== 'string' || !DATE_KEY_PATTERN.test(dateKey)) {
+    return false;
+  }
+  var parts = dateKey.split('-').map(Number);
+  var d = new Date(parts[0], parts[1] - 1, parts[2]);
+  return d.getFullYear() === parts[0] && d.getMonth() === parts[1] - 1 && d.getDate() === parts[2];
+}
 
 /**
  * Throws if the goal input is invalid. Kept dependency-free so it can be
@@ -53,6 +69,17 @@ function validateGoalInput(input) {
   // aren't rejected just for being multi-unit under .length.
   if (Array.from(icon).length > 4) {
     throw new Error('Goal icon must be 4 characters or fewer (emoji recommended).');
+  }
+  if (!isValidDateKey(input.startDate)) {
+    throw new Error('A valid start date is required.');
+  }
+  if (
+    typeof input.durationDays !== 'number' ||
+    !Number.isInteger(input.durationDays) ||
+    input.durationDays < 1 ||
+    input.durationDays > MAX_DURATION_DAYS
+  ) {
+    throw new Error('Duration must be a whole number of days between 1 and ' + MAX_DURATION_DAYS + '.');
   }
 }
 
@@ -98,6 +125,8 @@ function createGoal(input) {
     id: Utilities.getUuid(),
     name: input.name.trim(),
     icon: input.icon.trim(),
+    startDate: input.startDate,
+    durationDays: input.durationDays,
     active: true,
     createdAt: new Date().toISOString()
   };
@@ -119,6 +148,12 @@ function updateGoal(goalId, updates) {
       }
       if (updates && typeof updates.active === 'boolean') {
         goals[i].active = updates.active;
+      }
+      if (updates && typeof updates.startDate === 'string') {
+        goals[i].startDate = updates.startDate;
+      }
+      if (updates && typeof updates.durationDays === 'number') {
+        goals[i].durationDays = updates.durationDays;
       }
       validateGoalInput(goals[i]);
       target = goals[i];

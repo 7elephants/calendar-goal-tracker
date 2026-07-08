@@ -11,21 +11,27 @@
  *     - step: 2
  *       call: "buildHomeCard(dateKey, goalsWithStatus)"
  *       input: "dateKey: 'YYYY-MM-DD', goalsWithStatus: Array<{ goal: Goal, status: string|null }>"
- *       output: "CardService.Card showing every goal for that day with Success/Fail/Clear buttons"
+ *       output: "CardService.Card showing every goal for that day with Mark done/Mark missed/Clear buttons"
  *     - step: 3
  *       call: "buildCreateGoalCard()"
  *       input: "none"
- *       output: "CardService.Card with name + icon TextInputs and a submit button"
+ *       output: "CardService.Card with name/icon TextInputs, a start-date DatePicker (defaulted to today), a duration-in-days TextInput, and a submit button"
  *     - step: 4
  *       call: "buildDatePickerCard(dateKey)"
  *       input: "dateKey: 'YYYY-MM-DD' currently selected"
- *       output: "CardService.Card with a DatePicker widget (seeded via CalendarService.dateKeyToUtcMs, since the widget is UTC-based) and a 'Go' button"
+ *       output: "CardService.Card with a DatePicker widget (seeded via CalendarService.dateKeyToUtcMs, since the widget is UTC-based) and a 'Go to day' button"
  *     - step: 5
  *       call: "buildErrorCard(message)"
  *       input: "message: string"
  *       output: "CardService.Card shown in place of the home card when a Calendar API call fails, so a backend error never surfaces as a raw crash"
  * ---
  */
+
+// Matches the primaryColor/secondaryColor declared in appsscript.json plus
+// Google's standard Material red for the negative/destructive action.
+var GOAL_COLOR_PRIMARY = '#1a73e8';
+var GOAL_COLOR_SUCCESS = '#188038';
+var GOAL_COLOR_FAIL = '#d93025';
 
 function formatStatusLabel(status) {
   if (status === 'success') {
@@ -43,12 +49,18 @@ function formatDisplayDate(dateKey) {
   return Utilities.formatDate(d, Session.getScriptTimeZone(), 'EEEE, MMMM d, yyyy');
 }
 
-function buildGoalRowWidget(goal, dateKey, status) {
-  var decoratedText = CardService.newDecoratedText()
-    .setTopLabel(goal.icon + ' ' + goal.name)
-    .setText(formatStatusLabel(status))
-    .setWrapText(true);
+function formatWindowBadge(goal, dateKey) {
+  var windowStatus = getGoalWindowStatus(goal, dateKey);
+  if (windowStatus === 'upcoming') {
+    return 'Starts ' + formatDisplayDate(goal.startDate);
+  }
+  if (windowStatus === 'completed') {
+    return '🏁 Completed (' + goal.durationDays + '-day goal)';
+  }
+  return null;
+}
 
+function buildGoalRowWidget(goal, dateKey, status) {
   var successAction = CardService.newAction()
     .setFunctionName('handleMarkStatus')
     .setParameters({ goalId: goal.id, dateKey: dateKey, status: 'success' });
@@ -62,11 +74,48 @@ function buildGoalRowWidget(goal, dateKey, status) {
     .setFunctionName('handleDeleteGoal')
     .setParameters({ goalId: goal.id });
 
+  var deleteButton = CardService.newTextButton()
+    .setText('Delete')
+    .setAltText('Delete goal')
+    .setMaterialIcon(CardService.newMaterialIcon().setName('delete'))
+    .setTextButtonStyle(CardService.TextButtonStyle.BORDERLESS)
+    .setOnClickAction(deleteAction);
+
+  var decoratedText = CardService.newDecoratedText()
+    .setTopLabel(goal.icon + ' ' + goal.name)
+    .setText(formatStatusLabel(status))
+    .setWrapText(true)
+    .setButton(deleteButton);
+
+  var windowBadge = formatWindowBadge(goal, dateKey);
+  if (windowBadge) {
+    decoratedText.setBottomLabel(windowBadge);
+  }
+
   var buttonSet = CardService.newButtonSet()
-    .addButton(CardService.newTextButton().setText('✅ Success').setOnClickAction(successAction))
-    .addButton(CardService.newTextButton().setText('❌ Fail').setOnClickAction(failAction))
-    .addButton(CardService.newTextButton().setText('Clear').setOnClickAction(clearAction))
-    .addButton(CardService.newTextButton().setText('Delete goal').setOnClickAction(deleteAction));
+    .addButton(
+      CardService.newTextButton()
+        .setText('Mark done')
+        .setMaterialIcon(CardService.newMaterialIcon().setName('check_circle'))
+        .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+        .setBackgroundColor(GOAL_COLOR_SUCCESS)
+        .setOnClickAction(successAction)
+    )
+    .addButton(
+      CardService.newTextButton()
+        .setText('Mark missed')
+        .setMaterialIcon(CardService.newMaterialIcon().setName('cancel'))
+        .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+        .setBackgroundColor(GOAL_COLOR_FAIL)
+        .setOnClickAction(failAction)
+    )
+    .addButton(
+      CardService.newTextButton()
+        .setText('Clear')
+        .setMaterialIcon(CardService.newMaterialIcon().setName('undo'))
+        .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
+        .setOnClickAction(clearAction)
+    );
 
   return { decoratedText: decoratedText, buttonSet: buttonSet };
 }
@@ -94,8 +143,21 @@ function buildHomeCard(dateKey, goalsWithStatus) {
     .setParameters({ dateKey: dateKey });
   actionsSection.addWidget(
     CardService.newButtonSet()
-      .addButton(CardService.newTextButton().setText('+ New goal').setOnClickAction(newGoalAction))
-      .addButton(CardService.newTextButton().setText('📅 Choose day').setOnClickAction(pickDateAction))
+      .addButton(
+        CardService.newTextButton()
+          .setText('Create goal')
+          .setMaterialIcon(CardService.newMaterialIcon().setName('add'))
+          .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+          .setBackgroundColor(GOAL_COLOR_PRIMARY)
+          .setOnClickAction(newGoalAction)
+      )
+      .addButton(
+        CardService.newTextButton()
+          .setText('Choose day')
+          .setMaterialIcon(CardService.newMaterialIcon().setName('calendar_month'))
+          .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
+          .setOnClickAction(pickDateAction)
+      )
   );
 
   return CardService.newCardBuilder()
@@ -116,15 +178,28 @@ function buildCreateGoalCard() {
     .setFieldName('goalIcon')
     .setTitle('Icon / emoji')
     .setHint('e.g. 🏃');
+  var startDateInput = CardService.newDatePicker()
+    .setFieldName('goalStartDate')
+    .setTitle('Start date')
+    .setValueInMsSinceEpoch(dateKeyToUtcMs(getDateKey(new Date())));
+  var durationInput = CardService.newTextInput()
+    .setFieldName('goalDurationDays')
+    .setTitle('Duration (days)')
+    .setHint('e.g. 30');
 
   var submitAction = CardService.newAction().setFunctionName('handleCreateGoalSubmit');
   var submitButton = CardService.newTextButton()
     .setText('Create goal')
+    .setMaterialIcon(CardService.newMaterialIcon().setName('add'))
+    .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+    .setBackgroundColor(GOAL_COLOR_PRIMARY)
     .setOnClickAction(submitAction);
 
   var section = CardService.newCardSection()
     .addWidget(nameInput)
     .addWidget(iconInput)
+    .addWidget(startDateInput)
+    .addWidget(durationInput)
     .addWidget(submitButton);
 
   return CardService.newCardBuilder().setHeader(header).addSection(section).build();
@@ -138,7 +213,12 @@ function buildDatePickerCard(dateKey) {
     .setValueInMsSinceEpoch(dateKeyToUtcMs(dateKey));
 
   var goAction = CardService.newAction().setFunctionName('handleGoToDate');
-  var goButton = CardService.newTextButton().setText('Go').setOnClickAction(goAction);
+  var goButton = CardService.newTextButton()
+    .setText('Go to day')
+    .setMaterialIcon(CardService.newMaterialIcon().setName('arrow_forward'))
+    .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+    .setBackgroundColor(GOAL_COLOR_PRIMARY)
+    .setOnClickAction(goAction);
 
   var section = CardService.newCardSection().addWidget(datePicker).addWidget(goButton);
 

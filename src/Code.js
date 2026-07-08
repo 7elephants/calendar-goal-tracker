@@ -19,7 +19,7 @@
  *     - step: 4
  *       call: "handleOpenCreateGoalCard(e) / handleCreateGoalSubmit(e) / handleOpenDatePickerCard(e) / handleGoToDate(e) / handleDeleteGoal(e)"
  *       input: "varies: e.parameters or e.formInput depending on the widget that triggered the action"
- *       output: "ActionResponse that either pushes a new card or updates the current card. handleGoToDate parses the DatePicker's UTC epoch-ms value with CalendarService.utcMsToDateKey (not getDateKey, which is local-time) to avoid an off-by-one-day bug."
+ *       output: "ActionResponse that either pushes a new card or updates the current card. handleGoToDate and handleCreateGoalSubmit both parse a DatePicker's UTC epoch-ms value with CalendarService.utcMsToDateKey (not getDateKey, which is local-time) to avoid an off-by-one-day bug."
  * ---
  */
 
@@ -108,8 +108,15 @@ function handleOpenCreateGoalCard(e) {
 
 function handleCreateGoalSubmit(e) {
   var formInput = e.formInput || {};
+  var startDate = formInput.goalStartDate ? utcMsToDateKey(Number(formInput.goalStartDate)) : undefined;
+  var durationDays = formInput.goalDurationDays ? Number(formInput.goalDurationDays) : undefined;
   try {
-    createGoal({ name: formInput.goalName, icon: formInput.goalIcon });
+    createGoal({
+      name: formInput.goalName,
+      icon: formInput.goalIcon,
+      startDate: startDate,
+      durationDays: durationDays
+    });
   } catch (err) {
     return CardService.newActionResponseBuilder()
       .setNotification(CardService.newNotification().setText(err.message))
