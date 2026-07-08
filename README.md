@@ -16,8 +16,9 @@ check.
   or delete an all-day Calendar event for that goal on the selected day.
   Success events use Calendar's green ("Basil") color; fails use red
   ("Tomato").
-- **📅 Choose day** opens a date picker so you can back-fill or review any
-  day, not just today.
+- A date-navigation row at the top of the card (◀ *date* ▶) moves one day
+  back/forward in place. Tapping the date itself opens a date picker so you
+  can jump straight to any day, not just step through one at a time.
 - **+ New goal** opens a form (name, icon, start date, and duration in days)
   and saves it to your Apps Script user properties — this is
   per-Google-account, private to you.
@@ -110,7 +111,8 @@ covered by the manual test plan below instead.
 - [ ] Mark it "Mark done" for today; a green all-day event with the icon+name+✅ appears on today's date in Calendar.
 - [ ] Mark it "Mark missed" for today; the same event turns red and updates to ❌ (no duplicate event created).
 - [ ] Click "Clear"; the event is removed from the calendar.
-- [ ] Use "Choose day" to jump to a past date and set a status there; confirm it lands on the correct date.
+- [ ] Tap the left/right arrows in the date-navigation row; confirm the card updates in place to the previous/next day.
+- [ ] Tap the date itself between the arrows; confirm it opens the date picker, and picking a day jumps straight there.
 - [ ] Create a second goal, confirm both show independently with independent statuses per day.
 - [ ] Delete a goal; confirm it disappears from the home card but its past calendar events remain.
 - [ ] Submit the "New goal" form with an empty name; confirm a validation error notification appears and no goal is created.
@@ -118,5 +120,5 @@ covered by the manual test plan below instead.
 - [ ] Create a goal with a start date in the future; confirm the home card shows a "Starts ..." badge and Mark done/Mark missed still work.
 - [ ] Create a goal with a past start date and a short duration so the window has already elapsed; confirm a "🏁 Completed" badge appears and Mark done/Mark missed still work.
 - [ ] In the Goal summary section, confirm each goal shows the right icon, duration, days left, and done/missed counts; mark a few days done/missed and confirm the counts update after reopening the add-on.
-- [ ] Confirm the Goal summary numbers don't change when you use "Choose day" to view a different day (they should stay pinned to today).
+- [ ] Confirm the Goal summary numbers don't change when you navigate to a different day (they should stay pinned to today).
 - [ ] Reload Calendar entirely and reopen the add-on; confirm goals and today's statuses persist (PropertiesService + Calendar are both durable).

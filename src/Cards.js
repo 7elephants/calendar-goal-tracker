@@ -11,7 +11,7 @@
  *     - step: 2
  *       call: "buildHomeCard(dateKey, goalsWithStatus)"
  *       input: "dateKey: 'YYYY-MM-DD', goalsWithStatus: Array<{ goal: Goal, status: string|null, summary: CalendarService.getGoalSummaryStats() result }>"
- *       output: "CardService.Card with today's goals (Mark done/Mark missed/Clear buttons) plus a read-only 'Goal summary' section (icon, duration, days left/done/missed per goal)"
+ *       output: "CardService.Card with no CardHeader (title is required by CardHeader so an empty one is unsafe; the add-on's own name in Calendar's chrome already labels the card). First widget is a date-nav row (chevron_left/chevron_right call handleShiftDay to move +/-1 day in place; the date label between them calls handleOpenDatePickerCard). Then today's goals (Mark done/Mark missed/Clear buttons), a read-only 'Goal summary' section (icon, duration, days left/done/missed per goal), and a Create goal action."
  *     - step: 3
  *       call: "buildCreateGoalCard()"
  *       input: "none"
@@ -73,6 +73,41 @@ function buildGoalSummaryRowWidget(goal, stats) {
     .setWrapText(true);
 }
 
+function buildDateNavRowWidget(dateKey) {
+  var prevAction = CardService.newAction()
+    .setFunctionName('handleShiftDay')
+    .setParameters({ dateKey: dateKey, days: '-1' });
+  var nextAction = CardService.newAction()
+    .setFunctionName('handleShiftDay')
+    .setParameters({ dateKey: dateKey, days: '1' });
+  var pickDateAction = CardService.newAction()
+    .setFunctionName('handleOpenDatePickerCard')
+    .setParameters({ dateKey: dateKey });
+
+  return CardService.newButtonSet()
+    .addButton(
+      CardService.newTextButton()
+        .setAltText('Previous day')
+        .setMaterialIcon(CardService.newMaterialIcon().setName('chevron_left'))
+        .setTextButtonStyle(CardService.TextButtonStyle.BORDERLESS)
+        .setOnClickAction(prevAction)
+    )
+    .addButton(
+      CardService.newTextButton()
+        .setText(formatDisplayDate(dateKey))
+        .setAltText('Choose a day')
+        .setTextButtonStyle(CardService.TextButtonStyle.BORDERLESS)
+        .setOnClickAction(pickDateAction)
+    )
+    .addButton(
+      CardService.newTextButton()
+        .setAltText('Next day')
+        .setMaterialIcon(CardService.newMaterialIcon().setName('chevron_right'))
+        .setTextButtonStyle(CardService.TextButtonStyle.BORDERLESS)
+        .setOnClickAction(nextAction)
+    );
+}
+
 function buildGoalRowWidget(goal, dateKey, status) {
   var successAction = CardService.newAction()
     .setFunctionName('handleMarkStatus')
@@ -131,9 +166,7 @@ function buildGoalRowWidget(goal, dateKey, status) {
 }
 
 function buildHomeCard(dateKey, goalsWithStatus) {
-  var header = CardService.newCardHeader()
-    .setTitle('Goals & Habits')
-    .setSubtitle(formatDisplayDate(dateKey));
+  var navSection = CardService.newCardSection().addWidget(buildDateNavRowWidget(dateKey));
 
   var goalsSection = CardService.newCardSection().setHeader('Today’s goals');
   if (!goalsWithStatus || goalsWithStatus.length === 0) {
@@ -157,30 +190,19 @@ function buildHomeCard(dateKey, goalsWithStatus) {
 
   var actionsSection = CardService.newCardSection();
   var newGoalAction = CardService.newAction().setFunctionName('handleOpenCreateGoalCard');
-  var pickDateAction = CardService.newAction()
-    .setFunctionName('handleOpenDatePickerCard')
-    .setParameters({ dateKey: dateKey });
   actionsSection.addWidget(
-    CardService.newButtonSet()
-      .addButton(
-        CardService.newTextButton()
-          .setText('Create goal')
-          .setMaterialIcon(CardService.newMaterialIcon().setName('add'))
-          .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
-          .setBackgroundColor(GOAL_COLOR_PRIMARY)
-          .setOnClickAction(newGoalAction)
-      )
-      .addButton(
-        CardService.newTextButton()
-          .setText('Choose day')
-          .setMaterialIcon(CardService.newMaterialIcon().setName('calendar_month'))
-          .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
-          .setOnClickAction(pickDateAction)
-      )
+    CardService.newButtonSet().addButton(
+      CardService.newTextButton()
+        .setText('Create goal')
+        .setMaterialIcon(CardService.newMaterialIcon().setName('add'))
+        .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+        .setBackgroundColor(GOAL_COLOR_PRIMARY)
+        .setOnClickAction(newGoalAction)
+    )
   );
 
   return CardService.newCardBuilder()
-    .setHeader(header)
+    .addSection(navSection)
     .addSection(goalsSection)
     .addSection(summarySection)
     .addSection(actionsSection)
