@@ -15,15 +15,15 @@
  *     - step: 3
  *       call: "handleMarkStatus(e)"
  *       input: "e.parameters: { goalId, dateKey, status: 'success'|'fail'|'clear' }"
- *       output: "ActionResponse that updates the card in place via CalendarService.setGoalStatus(), or an error notification if the Calendar API call fails"
+ *       output: "ActionResponse that updates the card in place via CalendarService.setGoalStatus(), or a notification (no Calendar write) if the goal is missing, soft-deleted (active: false), or the Calendar API call fails"
  *     - step: 4
  *       call: "handleOpenCreateGoalCard(e) / handleCreateGoalSubmit(e) / handleOpenEditGoalCard(e) / handleEditGoalSubmit(e)"
  *       input: "e.parameters: { goalId } (edit only, identifies which goal to open/save) plus e.formInput: { goalName, goalIcon, goalStartDate, goalDurationDays }"
- *       output: "ActionResponse that pushes the create/edit form card, or (on submit) saves via GoalService.createGoal()/updateGoal() and pops back to an updated home card. Both submit handlers build their GoalService input via the shared parseGoalFormInput_(formInput, fallbackStartDate) helper, which reads the DatePicker value via datePickerValueToDateKey_() and treats a blank duration field the same as an explicit 0 (durationDays: 0 means the goal runs forever - see validateGoalInput in GoalService.js)."
+ *       output: "ActionResponse that pushes the create/edit form card, or (on submit) saves via GoalService.createGoal()/updateGoal() and pops back to an updated home card. Both submit handlers build their GoalService input via the shared parseGoalFormInput_(formInput, fallbackStartDate) helper, which reads the DatePicker value via datePickerValueToDateKey_() and treats a blank duration field the same as an explicit 0 (durationDays: 0 means the goal runs forever - see validateGoalInput in GoalService.js). handleOpenEditGoalCard rejects with a notification instead of pushing the card if the goal is soft-deleted (active: false); handleEditGoalSubmit needs no separate check for that since GoalService.updateGoal() itself throws for a soft-deleted goal, which the existing try/catch surfaces as a notification."
  *     - step: 5
  *       call: "handleOpenDatePickerCard(e) / handleGoToDate(e) / handleShiftDay(e) / handleDeleteGoal(e)"
  *       input: "varies: e.parameters or e.formInput depending on the widget that triggered the action"
- *       output: "ActionResponse that either pushes a new card or updates the current card. handleGoToDate reads its DatePicker value via datePickerValueToDateKey_(), which handles e.formInput delivering either a raw epoch-ms string (per Google's docs) or a { msSinceEpoch } object (observed live in this runtime), then converts with CalendarService.utcMsToDateKey (not getDateKey, which is local-time) to avoid an off-by-one-day bug; falls back to todayDateKey_() when no usable value is present. handleShiftDay reads e.parameters.dateKey/days (+/-1, from the home card's prev/next arrows) and updates the card in place via CalendarService.addDaysToDateKey — no push/pop, unlike the DatePicker sub-card flows."
+ *       output: "ActionResponse that either pushes a new card or updates the current card. handleGoToDate reads its DatePicker value via datePickerValueToDateKey_(), which handles e.formInput delivering either a raw epoch-ms string (per Google's docs) or a { msSinceEpoch } object (observed live in this runtime), then converts with CalendarService.utcMsToDateKey (not getDateKey, which is local-time) to avoid an off-by-one-day bug; falls back to todayDateKey_() when no usable value is present. handleShiftDay reads e.parameters.dateKey/days (+/-1, from the home card's prev/next arrows) and updates the card in place via CalendarService.addDaysToDateKey — no push/pop, unlike the DatePicker sub-card flows. handleDeleteGoal soft-deletes via GoalService.deleteGoal() (sets active: false; no data or past Calendar events are removed) then re-renders the home card, from which the goal now disappears."
  * ---
  */
 
@@ -48,6 +48,20 @@ function datePickerValueToDateKey_(value) {
   }
   var ms = typeof value === 'object' ? Number(value.msSinceEpoch) : Number(value);
   return isNaN(ms) ? null : utcMsToDateKey(ms);
+}
+
+/**
+ * Shared by handleMarkStatus/handleOpenEditGoalCard: the notification shown
+ * when acting on a soft-deleted goal (active: false). handleEditGoalSubmit
+ * needs no equivalent check - GoalService.updateGoal() itself throws for a
+ * soft-deleted goal, which its existing try/catch already surfaces.
+ */
+function deletedGoalNotification_(actionVerb) {
+  return CardService.newActionResponseBuilder()
+    .setNotification(
+      CardService.newNotification().setText('This goal has been deleted and can no longer be ' + actionVerb + '.')
+    )
+    .build();
 }
 
 /**
@@ -118,6 +132,9 @@ function handleMarkStatus(e) {
     return CardService.newActionResponseBuilder()
       .setNotification(CardService.newNotification().setText('Goal no longer exists.'))
       .build();
+  }
+  if (goal.active === false) {
+    return deletedGoalNotification_('marked');
   }
 
   var date = dateKeyToDate_(params.dateKey);
@@ -199,6 +216,9 @@ function handleOpenEditGoalCard(e) {
       .setNotification(CardService.newNotification().setText('Goal no longer exists.'))
       .build();
   }
+  if (goal.active === false) {
+    return deletedGoalNotification_('edited');
+  }
 
   var card = buildEditGoalCard(goal);
   return CardService.newActionResponseBuilder()
@@ -243,6 +263,6 @@ function handleDeleteGoal(e) {
   var updatedCard = buildHomeCardOrErrorCard_(todayDateKey_());
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation().updateCard(updatedCard))
-    .setNotification(CardService.newNotification().setText('Goal deleted. Past calendar events are kept.'))
+    .setNotification(CardService.newNotification().setText('Goal deleted. Its data and past calendar events are kept.'))
     .build();
 }

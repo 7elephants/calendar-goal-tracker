@@ -38,8 +38,13 @@ check.
   Forever goals (duration 0, or goals created before the duration field
   existed) show "∞" for duration/days left and count done/missed from their
   start date (or creation date) through today.
-- Deleting a goal only stops future tracking; it does **not** delete past
-  calendar events, so your history stays intact.
+- Deleting a goal is a **soft delete**: it disappears from the home card and
+  Goal summary, but its definition and all its past calendar events are kept
+  forever — nothing is erased, and there's currently no way to view or
+  restore a deleted goal. A deleted goal can also no longer be marked or
+  edited; if a stale card somehow still tries (e.g. it was open in another
+  tab before you deleted the goal), the add-on shows a notification instead
+  of making the change.
 
 Goal *definitions* (name, icon, start date, duration in days, active flag)
 live in `PropertiesService.getUserProperties()`. Goal *status per day* is not
@@ -120,7 +125,9 @@ covered by the manual test plan below instead.
 - [ ] Tap the left/right arrows in the date-navigation row; confirm the card updates in place to the previous/next day.
 - [ ] Tap the date itself between the arrows; confirm it opens the date picker, and picking a day jumps straight there.
 - [ ] Create a second goal, confirm both show independently with independent statuses per day.
-- [ ] Delete a goal; confirm it disappears from the home card but its past calendar events remain.
+- [ ] Delete a goal; confirm it disappears from the home card and Goal summary, and a "kept" notification appears.
+- [ ] After deleting a goal, confirm its past calendar events are untouched, and re-opening the add-on never shows it again (no restore path).
+- [ ] From a card that was still open before you deleted a goal elsewhere (or by double-tapping Delete quickly), try to delete/mark/edit that same goal again; confirm it's a harmless no-op / graceful notification, not an error.
 - [ ] Submit the "New goal" form with an empty name; confirm a validation error notification appears and no goal is created.
 - [ ] Submit the "New goal" form with a duration of 0; confirm the goal is created with no window badge, and its Goal summary row shows "∞" for duration/days left.
 - [ ] Submit the "New goal" form with a blank duration; confirm the same forever behavior as duration 0.
