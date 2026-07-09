@@ -72,7 +72,7 @@ function formatGoalSummaryLine(stats) {
 
 function buildGoalSummaryRowWidget(goal, stats) {
   return CardService.newDecoratedText()
-    .setText(goal.icon + '  ' + formatGoalSummaryLine(stats))
+    .setText(goal.icon + '&nbsp;' + formatGoalSummaryLine(stats))
     .setWrapText(true);
 }
 
@@ -130,8 +130,8 @@ function buildGoalRowWidget(goal, dateKey, status) {
 
   var statusLabel = formatStatusLabel(status);
   var decoratedText = CardService.newDecoratedText()
-    .setText(statusLabel ? goal.icon + '  ' + statusLabel : goal.icon)
-    .setWrapText(true);
+    .setText(statusLabel ? goal.icon + '&nbsp;' + statusLabel : goal.icon)
+    .setWrapText(false);
 
   var windowBadge = formatWindowBadge(goal, dateKey);
   if (windowBadge) {
