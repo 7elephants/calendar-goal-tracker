@@ -2,7 +2,7 @@
  * ---
  * file: src/GoalService.js
  * workflow:
- *   invocation: "Called by Cards.js and Code.js action handlers; never invoked directly by a trigger."
+ *   invocation: "Called by ActionHandlers.js/CodeHelpers.js and GoalFormCard.js; never invoked directly by a trigger."
  *   steps:
  *     - step: 1
  *       call: "validateGoalInput(input)"

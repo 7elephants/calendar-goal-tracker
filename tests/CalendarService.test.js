@@ -3,6 +3,8 @@
  * service since it only exists inside the Apps Script runtime.
  */
 
+var DateKeyUtils = require('../src/DateKeyUtils.js');
+
 function makeCalendarMock() {
   var events = {};
   var nextId = 1;
@@ -56,39 +58,6 @@ describe('CalendarService', function () {
 
   afterEach(function () {
     delete global.Calendar;
-  });
-
-  describe('getDateKey', function () {
-    it('formats a Date as YYYY-MM-DD', function () {
-      expect(CalendarService.getDateKey(new Date(2026, 0, 5))).toBe('2026-01-05');
-    });
-  });
-
-  describe('addDaysToDateKey', function () {
-    it('adds days and rolls over month boundaries', function () {
-      expect(CalendarService.addDaysToDateKey('2026-01-31', 1)).toBe('2026-02-01');
-    });
-  });
-
-  describe('dateKeyToUtcMs / utcMsToDateKey', function () {
-    it('round-trips a dateKey through UTC epoch ms regardless of local timezone', function () {
-      var ms = CalendarService.dateKeyToUtcMs('2026-01-05');
-      expect(CalendarService.utcMsToDateKey(ms)).toBe('2026-01-05');
-    });
-
-    it('produces UTC midnight for the given day', function () {
-      var ms = CalendarService.dateKeyToUtcMs('2026-01-05');
-      var d = new Date(ms);
-      expect(d.getUTCFullYear()).toBe(2026);
-      expect(d.getUTCMonth()).toBe(0);
-      expect(d.getUTCDate()).toBe(5);
-      expect(d.getUTCHours()).toBe(0);
-    });
-
-    it('rolls over year boundaries correctly', function () {
-      var ms = CalendarService.dateKeyToUtcMs('2025-12-31');
-      expect(CalendarService.utcMsToDateKey(ms)).toBe('2025-12-31');
-    });
   });
 
   describe('buildEventTitle', function () {
@@ -155,6 +124,22 @@ describe('CalendarService', function () {
     });
   });
 
+  describe('goalHasWindow', function () {
+    it('returns false when durationDays is 0 (forever goal)', function () {
+      var foreverGoal = { id: 'goal-1', name: 'Meditate', icon: '🧘', startDate: '2026-07-01', durationDays: 0 };
+      expect(CalendarService.goalHasWindow(foreverGoal)).toBe(false);
+    });
+
+    it('returns false when durationDays is missing entirely', function () {
+      expect(CalendarService.goalHasWindow(goal)).toBe(false);
+    });
+
+    it('returns true when both startDate and a non-zero durationDays are stored', function () {
+      var windowedGoal = { id: 'goal-1', name: 'Run 3 miles', icon: '🏃', startDate: '2026-07-01', durationDays: 30 };
+      expect(CalendarService.goalHasWindow(windowedGoal)).toBe(true);
+    });
+  });
+
   describe('getGoalWindowStatus', function () {
     var windowedGoal = { id: 'goal-1', name: 'Run 3 miles', icon: '🏃', startDate: '2026-07-01', durationDays: 30 };
 
@@ -181,21 +166,6 @@ describe('CalendarService', function () {
 
     it('returns "completed" the day after the window ends', function () {
       expect(CalendarService.getGoalWindowStatus(windowedGoal, '2026-07-31')).toBe('completed');
-    });
-  });
-
-  describe('daysBetweenDateKeys', function () {
-    it('counts whole days between two dateKeys', function () {
-      expect(CalendarService.daysBetweenDateKeys('2026-07-01', '2026-07-08')).toBe(7);
-    });
-
-    it('returns 0 for the same dateKey', function () {
-      expect(CalendarService.daysBetweenDateKeys('2026-07-08', '2026-07-08')).toBe(0);
-    });
-
-    it('rolls over a DST spring-forward boundary without an off-by-one', function () {
-      // US DST started 2026-03-08; a naive (to - from) / msPerDay would compute 0.958 days, not 1.
-      expect(CalendarService.daysBetweenDateKeys('2026-03-07', '2026-03-08')).toBe(1);
     });
   });
 
@@ -257,7 +227,7 @@ describe('CalendarService', function () {
 
       var stats = CalendarService.getGoalSummaryStats(windowedGoal, '2026-07-08');
       expect(stats.durationDays).toBe(30);
-      expect(stats.daysLeft).toBe(CalendarService.daysBetweenDateKeys('2026-07-08', '2026-07-31'));
+      expect(stats.daysLeft).toBe(DateKeyUtils.daysBetweenDateKeys('2026-07-08', '2026-07-31'));
       expect(stats.daysDone).toBe(1);
       expect(stats.daysMissed).toBe(1);
     });
