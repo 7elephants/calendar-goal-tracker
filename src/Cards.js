@@ -145,6 +145,7 @@ function buildGoalRowWidget(goal, dateKey, status) {
         .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
         .setBackgroundColor(GOAL_COLOR_SUCCESS)
         .setOnClickAction(successAction)
+        .setAltText('Mark done')
     )
     .addButton(
       CardService.newTextButton()
@@ -152,24 +153,28 @@ function buildGoalRowWidget(goal, dateKey, status) {
         .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
         .setBackgroundColor(GOAL_COLOR_FAIL)
         .setOnClickAction(failAction)
+        .setAltText('Mark failed')
     )
     .addButton(
       CardService.newTextButton()
         .setMaterialIcon(CardService.newMaterialIcon().setName('undo'))
         .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
         .setOnClickAction(clearAction)
+        .setAltText('Clear')
     )
     .addButton(
       CardService.newTextButton()
         .setMaterialIcon(CardService.newMaterialIcon().setName('edit'))
         .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
         .setOnClickAction(editAction)
+        .setAltText('Edit')
     )
     .addButton(
       CardService.newTextButton()
         .setMaterialIcon(CardService.newMaterialIcon().setName('delete'))
         .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
         .setOnClickAction(deleteAction)
+        .setAltText('Delete')
     );
 
   return { decoratedText: decoratedText, buttonSet: buttonSet };
@@ -178,7 +183,7 @@ function buildGoalRowWidget(goal, dateKey, status) {
 function buildHomeCard(dateKey, goalsWithStatus) {
   var navSection = CardService.newCardSection().addWidget(buildDateNavRowWidget(dateKey));
 
-  var goalsSection = CardService.newCardSection().setHeader('Today’s goals');
+  var goalsSection = CardService.newCardSection().setHeader('<b>Today’s goals');
   if (!goalsWithStatus || goalsWithStatus.length === 0) {
     goalsSection.addWidget(CardService.newTextParagraph().setText('No goals yet. Create one below.'));
   } else {
@@ -189,7 +194,7 @@ function buildHomeCard(dateKey, goalsWithStatus) {
     });
   }
 
-  var summarySection = CardService.newCardSection().setHeader('Goal summary');
+  var summarySection = CardService.newCardSection().setHeader('<b>Goal summary</b>');
   if (!goalsWithStatus || goalsWithStatus.length === 0) {
     summarySection.addWidget(CardService.newTextParagraph().setText('No goals yet.'));
   } else {
