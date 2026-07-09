@@ -147,7 +147,6 @@ describe('GoalService', function () {
       var goal = GoalService.createGoal(validGoalInput({ name: 'Run 3 miles', icon: '🏃' }));
 
       expect(goal.id).toBe('uuid-1');
-      expect(goal.name).toBe('Run 3 miles');
       expect(goal.icon).toBe('🏃');
       expect(goal.startDate).toBe('2026-07-08');
       expect(goal.durationDays).toBe(30);

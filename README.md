@@ -11,11 +11,15 @@ check.
 
 - Opening the add-on's side panel in Google Calendar (or opening any event)
   shows a "Goals & Habits" card listing your active goals and today's status
-  for each.
-- **✅ Success** / **❌ Fail** / **Clear** buttons on each goal write, update,
-  or delete an all-day Calendar event for that goal on the selected day.
-  Success events use Calendar's green ("Basil") color; fails use red
-  ("Tomato").
+  for each. Each goal row shows just its icon/emoji (shown large, alongside
+  the day's ✅/❌ status) — the goal's name isn't displayed on the home card,
+  only in the Edit form.
+- **✅ Success** / **❌ Fail** / **Clear** / **✏️ Edit** / **🗑️ Delete** — all
+  five actions for a goal sit together in one button row underneath it.
+  Success/Fail/Clear write, update, or delete an all-day Calendar event for
+  that goal on the selected day, titled with just the goal's icon and a
+  ✅/❌ mark (no name). Success events use Calendar's green ("Basil") color;
+  fails use red ("Tomato").
 - A date-navigation row at the top of the card (◀ *date* ▶) moves one day
   back/forward in place. Tapping the date itself opens a date picker so you
   can jump straight to any day, not just step through one at a time.
@@ -25,7 +29,8 @@ check.
   forever** (leaving the field blank does the same).
 - The **✏️ Edit** button on a goal row opens the same form pre-filled with
   that goal's current name, icon, start date, and duration, and saves your
-  changes back to the same goal on submit.
+  changes back to the same goal on submit. This is the only place the goal's
+  name is shown or changed after creation.
 - Each goal has a start date and a duration (in days), or no duration at all
   for a goal that runs forever. This is purely informational: outside a
   fixed-duration goal's window the goal shows a badge ("Starts ..." /
@@ -119,7 +124,8 @@ covered by the manual test plan below instead.
 ### Manual test plan (run after `npm run push` + reload the add-on)
 
 - [ ] Create a goal with a name, an emoji icon, a start date, and a duration; it appears on the home card.
-- [ ] Mark it "Mark done" for today; a green all-day event with the icon+name+✅ appears on today's date in Calendar.
+- [ ] Mark it "Mark done" for today; a green all-day event titled with the icon and ✅ (no goal name) appears on today's date in Calendar.
+- [ ] Confirm the goal's icon appears large on the home card and in the Goal summary row, with no name shown in either place; confirm all five action buttons (Success/Fail/Clear/Edit/Delete) appear together in one row under the goal.
 - [ ] Mark it "Mark missed" for today; the same event turns red and updates to ❌ (no duplicate event created).
 - [ ] Click "Clear"; the event is removed from the calendar.
 - [ ] Tap the left/right arrows in the date-navigation row; confirm the card updates in place to the previous/next day.

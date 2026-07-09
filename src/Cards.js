@@ -11,7 +11,7 @@
  *     - step: 2
  *       call: "buildHomeCard(dateKey, goalsWithStatus)"
  *       input: "dateKey: 'YYYY-MM-DD', goalsWithStatus: Array<{ goal: Goal, status: string|null, summary: CalendarService.getGoalSummaryStats() result }>"
- *       output: "CardService.Card with no CardHeader (title is required by CardHeader so an empty one is unsafe; the add-on's own name in Calendar's chrome already labels the card). First widget is a date-nav row (chevron_left/chevron_right call handleShiftDay to move +/-1 day in place; the date label between them calls handleOpenDatePickerCard). Then today's goals (Mark done/Mark missed/Clear/Edit buttons), a read-only 'Goal summary' section (icon, duration, days left/done/missed per goal; duration/days-left render as '∞' for forever goals, i.e. durationDays === 0), and a Create goal action."
+ *       output: "CardService.Card with no CardHeader (title is required by CardHeader so an empty one is unsafe; the add-on's own name in Calendar's chrome already labels the card). First widget is a date-nav row (chevron_left/chevron_right call handleShiftDay to move +/-1 day in place; the date label between them calls handleOpenDatePickerCard). Then today's goals, one row per goal: a DecoratedText whose primary text is the goal's icon plus its status mark (large - DecoratedText's topLabel/bottomLabel captions render smaller than its main text, and CardService text widgets have no font-size control, so the icon lives in the main text slot to appear bigger; the goal name is intentionally not shown on the home card at all) immediately followed by a single ButtonSet with all five actions (Mark done/Mark missed/Clear/Edit/Delete) grouped together, since DecoratedText's own trailing slot only accepts one button, not a set. Then a read-only 'Goal summary' section (same icon-plus-text layout: icon, duration, days left/done/missed per goal; duration/days-left render as '∞' for forever goals, i.e. durationDays === 0), and a Create goal action."
  *     - step: 3
  *       call: "buildCreateGoalCard()"
  *       input: "none"
@@ -72,8 +72,7 @@ function formatGoalSummaryLine(stats) {
 
 function buildGoalSummaryRowWidget(goal, stats) {
   return CardService.newDecoratedText()
-    .setTopLabel(goal.icon + ' ' + goal.name)
-    .setText(formatGoalSummaryLine(stats))
+    .setText(goal.icon + '  ' + formatGoalSummaryLine(stats))
     .setWrapText(true);
 }
 
@@ -129,18 +128,10 @@ function buildGoalRowWidget(goal, dateKey, status) {
     .setFunctionName('handleDeleteGoal')
     .setParameters({ goalId: goal.id });
 
-  var deleteButton = CardService.newTextButton()
-    .setText('Delete')
-    .setAltText('Delete goal')
-    .setMaterialIcon(CardService.newMaterialIcon().setName('delete'))
-    .setTextButtonStyle(CardService.TextButtonStyle.BORDERLESS)
-    .setOnClickAction(deleteAction);
-
+  var statusLabel = formatStatusLabel(status);
   var decoratedText = CardService.newDecoratedText()
-    .setTopLabel(goal.icon + ' ' + goal.name)
-    .setText(formatStatusLabel(status))
-    .setWrapText(true)
-    .setButton(deleteButton);
+    .setText(statusLabel ? goal.icon + '  ' + statusLabel : goal.icon)
+    .setWrapText(true);
 
   var windowBadge = formatWindowBadge(goal, dateKey);
   if (windowBadge) {
@@ -173,6 +164,12 @@ function buildGoalRowWidget(goal, dateKey, status) {
         .setMaterialIcon(CardService.newMaterialIcon().setName('edit'))
         .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
         .setOnClickAction(editAction)
+    )
+    .addButton(
+      CardService.newTextButton()
+        .setMaterialIcon(CardService.newMaterialIcon().setName('delete'))
+        .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
+        .setOnClickAction(deleteAction)
     );
 
   return { decoratedText: decoratedText, buttonSet: buttonSet };
