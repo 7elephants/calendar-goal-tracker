@@ -99,7 +99,7 @@ function buildDateNavRowWidget(dateKey) {
       CardService.newTextButton()
         .setText(formatDisplayDate(dateKey))
         .setAltText('Choose a day')
-        .setTextButtonStyle(CardService.TextButtonStyle.BORDERLESS)
+        .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
         .setOnClickAction(pickDateAction)
     )
     .addButton(
