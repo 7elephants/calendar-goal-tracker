@@ -64,10 +64,17 @@ read back with no window badge and behave exactly like a forever goal.
 ```
 src/            Apps Script source (pushed to Google via clasp)
   appsscript.json    Add-on manifest: scopes, Calendar advanced service, triggers
-  Code.js            Trigger entry points (onHomepage, onCalendarEventOpen) + action handlers
-  Cards.js           CardService UI builders
-  GoalService.js     Goal CRUD, backed by PropertiesService
-  CalendarService.js Calendar event read/write, backed by the advanced Calendar API service
+  Triggers.js        Trigger entry points (onHomepage, onCalendarEventOpen)
+  ActionHandlers.js  Every CardService onClickAction handler (mark status, create/edit/delete goal, navigation)
+  CodeHelpers.js     Small private helpers shared by Triggers.js/ActionHandlers.js
+  HomeCard.js        Home card CardService UI (today's goals + Goal summary)
+  GoalFormCard.js    Create/edit goal form CardService UI
+  MiscCards.js       Small standalone cards (date picker, error card)
+  CardTheme.js       Shared button color constants
+  GoalService.js     Goal validation + CRUD, backed by PropertiesService
+  CalendarService.js Calendar event read/write + goal window/summary logic, backed by the advanced Calendar API service
+  GoalRules.js       Namespace object grouping goal-first-arg logic (windowStatus/summaryStats/isForever) for a more objectified call style
+  DateKeyUtils.js    Pure 'YYYY-MM-DD' dateKey math, no Apps Script dependency
 tests/          Jest unit tests for the pure/testable logic
 README.md       This file
 ```
@@ -110,15 +117,17 @@ npm test
 npm run test:coverage
 ```
 
-**Coverage note:** `GoalService.js` and `CalendarService.js` are unit
-tested with mocked `PropertiesService`/`Calendar` globals and currently sit
-at ~97-100% line coverage. `Code.js` and `Cards.js` are intentionally
+**Coverage note:** `GoalService.js`, `CalendarService.js`, `GoalRules.js`,
+`DateKeyUtils.js`, and `CardTheme.js` are unit tested (mocking
+`PropertiesService`/`Calendar` globals where needed) and sit at ~97-100%
+line coverage. `Triggers.js`, `ActionHandlers.js`, `CodeHelpers.js`,
+`HomeCard.js`, `GoalFormCard.js`, and `MiscCards.js` are intentionally
 excluded from coverage collection (see `jest.config.js`) because they are
 thin wiring around `CardService` and Calendar add-on trigger objects
 (`e.parameters`, `e.formInput`, card navigation) that only exist inside a
 live Google Calendar session with a real OAuth-authenticated add-on
 install. There is no way to instantiate `CardService` outside that runtime,
-so 100% coverage of those two files isn't achievable with Jest — they're
+so 100% coverage of those files isn't achievable with Jest — they're
 covered by the manual test plan below instead.
 
 ### Manual test plan (run after `npm run push` + reload the add-on)

@@ -2,98 +2,53 @@
  * ---
  * file: src/CalendarService.js
  * workflow:
- *   invocation: "Called by Code.js action handlers after a user taps a status button or picks a date in Cards.js."
+ *   invocation: "Called by ActionHandlers.js after a user taps a status button or picks a date via MiscCards.js's date picker. Pure dateKey math lives in DateKeyUtils.js, required below for Jest (Apps Script needs no such require - see that file's header)."
  *   steps:
  *     - step: 1
- *       call: "getDateKey(date)"
- *       input: "JS Date object"
- *       output: "'YYYY-MM-DD' string used as both the Calendar all-day event date and the extendedProperties lookup key"
- *     - step: 2
  *       call: "buildEventResource(goal, dateKey, status)"
  *       input: "goal: Goal, dateKey: string, status: 'success'|'fail'"
  *       output: "Calendar API v3 Events resource object (all-day, colored, tagged via extendedProperties.private)"
- *     - step: 3
+ *     - step: 2
  *       call: "findEventForGoalOnDate(goalId, dateKey)"
  *       input: "goalId: string, dateKey: string"
  *       output: "matching Calendar API event object or null, found via Calendar.Events.list with a privateExtendedProperty filter"
- *     - step: 4
+ *     - step: 3
  *       call: "setGoalStatus(goal, date, status)"
  *       input: "goal: Goal, date: Date, status: 'success'|'fail'|null"
  *       output: "the created/updated event, or null when status is null and the event was removed"
- *     - step: 5
+ *     - step: 4
  *       call: "getGoalStatusForDate(goalId, date)"
  *       input: "goalId: string, date: Date"
  *       output: "'success' | 'fail' | null"
+ *     - step: 5
+ *       call: "goalHasWindow(goal)"
+ *       input: "goal: Goal (with optional startDate/durationDays)"
+ *       output: "true only if both startDate and a non-zero durationDays are stored; shared by getGoalWindowStatus/getGoalSummaryStats so the 'does this goal have a fixed window' check is written once. Exposed as GoalRules.isForever's negation - see src/GoalRules.js."
  *     - step: 6
- *       call: "dateKeyToUtcMs(dateKey) / utcMsToDateKey(ms)"
- *       input: "'YYYY-MM-DD' string, or epoch ms"
- *       output: "the inverse value. Used only for the CardService DatePicker round trip, which is UTC-based regardless of the script's timezone (see Cards.js/Code.js) — kept separate from getDateKey (local time) to avoid an off-by-one-day bug."
- *     - step: 7
  *       call: "getGoalWindowStatus(goal, dateKey)"
  *       input: "goal: Goal (with optional startDate/durationDays), dateKey: 'YYYY-MM-DD'"
- *       output: "'upcoming' | 'active' | 'completed' | null (null for goals with no stored startDate/durationDays, e.g. created before this feature)"
- *     - step: 8
+ *       output: "'upcoming' | 'active' | 'completed' | null (null for goals with no window, e.g. forever goals or ones created before this feature)"
+ *     - step: 7
  *       call: "getGoalSummaryStats(goal, todayDateKey)"
  *       input: "goal: Goal, todayDateKey: 'YYYY-MM-DD'"
- *       output: "{ durationDays, daysLeft, daysDone, daysMissed } for the homepage summary section; durationDays/daysLeft are null (rendered as infinite) for goals with no stored durationDays. Internally paginates Calendar.Events.list via getGoalStatusCounts()."
+ *       output: "{ durationDays, daysLeft, daysDone, daysMissed } for the homepage summary section; durationDays/daysLeft are null (rendered as infinite) for goals with no window. Internally paginates Calendar.Events.list via getGoalStatusCounts()."
  * ---
  */
+
+// eslint-disable-next-line no-undef
+if (typeof module !== 'undefined') {
+  var DateKeyUtils = require('./DateKeyUtils.js');
+  var getDateKey = DateKeyUtils.getDateKey;
+  var addDaysToDateKey = DateKeyUtils.addDaysToDateKey;
+  var daysBetweenDateKeys = DateKeyUtils.daysBetweenDateKeys;
+  var dateKeyToUtcMs = DateKeyUtils.dateKeyToUtcMs;
+  var utcMsToDateKey = DateKeyUtils.utcMsToDateKey;
+}
 
 var CALENDAR_ID = 'primary';
 var APP_TAG = 'goal-tracker';
 var COLOR_ID_SUCCESS = '10'; // Basil (green)
 var COLOR_ID_FAIL = '11'; // Tomato (red)
-
-/**
- * Formats a Date as a Calendar all-day-event date string. Pure function,
- * deliberately independent of any Apps Script service so it can be unit tested.
- */
-function getDateKey(date) {
-  var year = date.getFullYear();
-  var month = String(date.getMonth() + 1).padStart(2, '0');
-  var day = String(date.getDate()).padStart(2, '0');
-  return year + '-' + month + '-' + day;
-}
-
-function addDaysToDateKey(dateKey, days) {
-  var parts = dateKey.split('-').map(Number);
-  var d = new Date(parts[0], parts[1] - 1, parts[2]);
-  d.setDate(d.getDate() + days);
-  return getDateKey(d);
-}
-
-/**
- * Whole calendar days between two dateKeys (toDateKeyExclusive - fromDateKey).
- * Pure function; Math.round (not floor) absorbs the +/-1hr DST days can have
- * when represented as local midnight Date objects.
- */
-function daysBetweenDateKeys(fromDateKey, toDateKeyExclusive) {
-  var fromParts = fromDateKey.split('-').map(Number);
-  var toParts = toDateKeyExclusive.split('-').map(Number);
-  var fromDate = new Date(fromParts[0], fromParts[1] - 1, fromParts[2]);
-  var toDate = new Date(toParts[0], toParts[1] - 1, toParts[2]);
-  return Math.round((toDate - fromDate) / (24 * 60 * 60 * 1000));
-}
-
-/**
- * CardService's DatePicker widget stores/returns its value as UTC midnight
- * for the displayed day, regardless of the script's timezone. Use these two
- * functions (not getDateKey, which is local-time) whenever converting to/from
- * a DatePicker's epoch-ms value, or the selected day will be off by one in
- * any timezone west of UTC.
- */
-function dateKeyToUtcMs(dateKey) {
-  var parts = dateKey.split('-').map(Number);
-  return Date.UTC(parts[0], parts[1] - 1, parts[2]);
-}
-
-function utcMsToDateKey(ms) {
-  var d = new Date(ms);
-  var year = d.getUTCFullYear();
-  var month = String(d.getUTCMonth() + 1).padStart(2, '0');
-  var day = String(d.getUTCDate()).padStart(2, '0');
-  return year + '-' + month + '-' + day;
-}
 
 function buildEventTitle(goal, status) {
   var mark = status === 'success' ? '✅' : '❌';
@@ -174,14 +129,23 @@ function getGoalStatusForDate(goalId, date) {
 }
 
 /**
+ * True only if goal has both a stored startDate and a non-zero durationDays
+ * - i.e. it runs within a fixed window rather than forever. Shared by
+ * getGoalWindowStatus/getGoalSummaryStats so this check exists once.
+ */
+function goalHasWindow(goal) {
+  return !!(goal && goal.startDate && goal.durationDays);
+}
+
+/**
  * Where dateKey falls relative to a goal's [startDate, startDate + durationDays)
- * window. Returns null for goals created before start date/duration existed
- * (no startDate or durationDays stored) so legacy goals never show a badge.
+ * window. Returns null for goals with no window (forever goals, or ones
+ * created before start date/duration existed) so they never show a badge.
  * dateKey strings compare correctly with plain '<' since 'YYYY-MM-DD' sorts
  * lexicographically the same as chronologically.
  */
 function getGoalWindowStatus(goal, dateKey) {
-  if (!goal || !goal.startDate || !goal.durationDays) {
+  if (!goalHasWindow(goal)) {
     return null;
   }
   if (dateKey < goal.startDate) {
@@ -235,7 +199,7 @@ function getGoalStatusCounts(goalId, fromDateKey, toDateKeyExclusive) {
  * goals that predate startDate too) through today.
  */
 function getGoalSummaryStats(goal, todayDateKey) {
-  var hasWindow = !!(goal.startDate && goal.durationDays);
+  var hasWindow = goalHasWindow(goal);
   var rangeStart = goal.startDate || getDateKey(new Date(goal.createdAt));
   var rangeEndExclusive = hasWindow
     ? addDaysToDateKey(goal.startDate, goal.durationDays)
@@ -260,17 +224,13 @@ function getGoalSummaryStats(goal, todayDateKey) {
 // eslint-disable-next-line no-undef
 if (typeof module !== 'undefined') {
   module.exports = {
-    getDateKey: getDateKey,
-    addDaysToDateKey: addDaysToDateKey,
-    dateKeyToUtcMs: dateKeyToUtcMs,
-    utcMsToDateKey: utcMsToDateKey,
     buildEventTitle: buildEventTitle,
     buildEventResource: buildEventResource,
     findEventForGoalOnDate: findEventForGoalOnDate,
     setGoalStatus: setGoalStatus,
     getGoalStatusForDate: getGoalStatusForDate,
+    goalHasWindow: goalHasWindow,
     getGoalWindowStatus: getGoalWindowStatus,
-    daysBetweenDateKeys: daysBetweenDateKeys,
     getGoalStatusCounts: getGoalStatusCounts,
     getGoalSummaryStats: getGoalSummaryStats,
     CALENDAR_ID: CALENDAR_ID,
