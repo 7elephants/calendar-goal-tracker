@@ -97,7 +97,7 @@ function utcMsToDateKey(ms) {
 
 function buildEventTitle(goal, status) {
   var mark = status === 'success' ? '✅' : '❌';
-  return goal.icon + ' ' + goal.name + ' ' + mark;
+  return goal.icon + ' ' + mark;
 }
 
 /**

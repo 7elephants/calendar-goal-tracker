@@ -19,11 +19,11 @@
  *     - step: 4
  *       call: "updateGoal(goalId, updates)"
  *       input: "goalId: string, updates: Partial<Goal>"
- *       output: "updated Goal object, persisted to user properties"
+ *       output: "updated Goal object, persisted to user properties; throws if the goal has been soft-deleted (active: false)"
  *     - step: 5
  *       call: "deleteGoal(goalId)"
  *       input: "goalId: string"
- *       output: "boolean, true if a goal was removed"
+ *       output: "boolean, true if a matching goal exists (soft-deleted in place by setting active: false - no data is ever removed, and there is no restore path); false only if no goal with that id exists"
  * ---
  */
 
@@ -137,27 +137,17 @@ function createGoal(input) {
   return goal;
 }
 
+/**
+ * Updates a goal's editable fields. Throws if the goal has been soft-deleted
+ * (active: false, set only by deleteGoal) - once deleted, a goal's data is
+ * frozen; there is no restore path, so this is a hard stop rather than a
+ * partial-update guard.
+ */
 function updateGoal(goalId, updates) {
   var goals = readGoalsFromStorage();
   var target = null;
   for (var i = 0; i < goals.length; i++) {
     if (goals[i].id === goalId) {
-      if (updates && typeof updates.name === 'string') {
-        goals[i].name = updates.name.trim();
-      }
-      if (updates && typeof updates.icon === 'string') {
-        goals[i].icon = updates.icon.trim();
-      }
-      if (updates && typeof updates.active === 'boolean') {
-        goals[i].active = updates.active;
-      }
-      if (updates && typeof updates.startDate === 'string') {
-        goals[i].startDate = updates.startDate;
-      }
-      if (updates && typeof updates.durationDays === 'number') {
-        goals[i].durationDays = updates.durationDays;
-      }
-      validateGoalInput(goals[i]);
       target = goals[i];
       break;
     }
@@ -165,20 +155,49 @@ function updateGoal(goalId, updates) {
   if (!target) {
     throw new Error('Goal not found: ' + goalId);
   }
+  if (target.active === false) {
+    throw new Error('This goal has been deleted and can no longer be changed.');
+  }
+
+  if (updates && typeof updates.name === 'string') {
+    target.name = updates.name.trim();
+  }
+  if (updates && typeof updates.icon === 'string') {
+    target.icon = updates.icon.trim();
+  }
+  if (updates && typeof updates.startDate === 'string') {
+    target.startDate = updates.startDate;
+  }
+  if (updates && typeof updates.durationDays === 'number') {
+    target.durationDays = updates.durationDays;
+  }
+  validateGoalInput(target);
   writeGoalsToStorage(goals);
   return target;
 }
 
+/**
+ * Soft-deletes a goal: marks it active: false rather than removing its
+ * record, so its data (and, separately, its past Calendar events) is never
+ * lost. Bypasses updateGoal's "already deleted" guard so calling this twice
+ * on the same goal is a harmless no-op. Returns false only when no goal with
+ * that id exists at all.
+ */
 function deleteGoal(goalId) {
   var goals = readGoalsFromStorage();
-  var filtered = goals.filter(function (g) {
-    return g.id !== goalId;
-  });
-  var removed = filtered.length !== goals.length;
-  if (removed) {
-    writeGoalsToStorage(filtered);
+  var target = null;
+  for (var i = 0; i < goals.length; i++) {
+    if (goals[i].id === goalId) {
+      target = goals[i];
+      break;
+    }
   }
-  return removed;
+  if (!target) {
+    return false;
+  }
+  target.active = false;
+  writeGoalsToStorage(goals);
+  return true;
 }
 
 // eslint-disable-next-line no-undef

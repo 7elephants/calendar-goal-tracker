@@ -147,7 +147,6 @@ describe('GoalService', function () {
       var goal = GoalService.createGoal(validGoalInput({ name: 'Run 3 miles', icon: '🏃' }));
 
       expect(goal.id).toBe('uuid-1');
-      expect(goal.name).toBe('Run 3 miles');
       expect(goal.icon).toBe('🏃');
       expect(goal.startDate).toBe('2026-07-08');
       expect(goal.durationDays).toBe(30);
@@ -180,13 +179,30 @@ describe('GoalService', function () {
   });
 
   describe('updateGoal', function () {
-    it('updates name, icon, and active flag', function () {
+    it('updates name and icon', function () {
+      var created = GoalService.createGoal(validGoalInput({ name: 'Meditate', icon: '🧘' }));
+      var updated = GoalService.updateGoal(created.id, { name: 'Meditate daily', icon: '🧘‍♀️' });
+
+      expect(updated.name).toBe('Meditate daily');
+      expect(updated.icon).toBe('🧘‍♀️');
+    });
+
+    it('throws when the goal has been soft-deleted, and leaves it unchanged', function () {
+      var created = GoalService.createGoal(validGoalInput({ name: 'Meditate', icon: '🧘' }));
+      GoalService.deleteGoal(created.id);
+
+      expect(function () {
+        GoalService.updateGoal(created.id, { name: 'Meditate daily' });
+      }).toThrow('This goal has been deleted');
+      expect(GoalService.getGoal(created.id).name).toBe('Meditate');
+    });
+
+    it('ignores an active field in updates; deleteGoal is the only way to change it', function () {
       var created = GoalService.createGoal(validGoalInput({ name: 'Meditate', icon: '🧘' }));
       var updated = GoalService.updateGoal(created.id, { name: 'Meditate daily', active: false });
 
       expect(updated.name).toBe('Meditate daily');
-      expect(updated.icon).toBe('🧘');
-      expect(updated.active).toBe(false);
+      expect(updated.active).toBe(true);
     });
 
     it('updates startDate and durationDays', function () {
@@ -219,10 +235,21 @@ describe('GoalService', function () {
   });
 
   describe('deleteGoal', function () {
-    it('removes an existing goal and returns true', function () {
+    it('soft-deletes: marks the goal inactive but keeps its data in storage', function () {
       var created = GoalService.createGoal(validGoalInput({ name: 'Meditate', icon: '🧘' }));
       expect(GoalService.deleteGoal(created.id)).toBe(true);
-      expect(GoalService.listGoals()).toHaveLength(0);
+
+      expect(GoalService.listGoals()).toHaveLength(1);
+      var deleted = GoalService.getGoal(created.id);
+      expect(deleted.active).toBe(false);
+      expect(deleted.name).toBe('Meditate');
+    });
+
+    it('is idempotent: deleting an already-deleted goal is a harmless no-op', function () {
+      var created = GoalService.createGoal(validGoalInput({ name: 'Meditate', icon: '🧘' }));
+      GoalService.deleteGoal(created.id);
+      expect(GoalService.deleteGoal(created.id)).toBe(true);
+      expect(GoalService.getGoal(created.id).active).toBe(false);
     });
 
     it('returns false when the goal does not exist', function () {

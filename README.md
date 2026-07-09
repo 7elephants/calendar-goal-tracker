@@ -11,11 +11,15 @@ check.
 
 - Opening the add-on's side panel in Google Calendar (or opening any event)
   shows a "Goals & Habits" card listing your active goals and today's status
-  for each.
-- **✅ Success** / **❌ Fail** / **Clear** buttons on each goal write, update,
-  or delete an all-day Calendar event for that goal on the selected day.
-  Success events use Calendar's green ("Basil") color; fails use red
-  ("Tomato").
+  for each. Each goal row shows just its icon/emoji (shown large, alongside
+  the day's ✅/❌ status) — the goal's name isn't displayed on the home card,
+  only in the Edit form.
+- **✅ Success** / **❌ Fail** / **Clear** / **✏️ Edit** / **🗑️ Delete** — all
+  five actions for a goal sit together in one button row underneath it.
+  Success/Fail/Clear write, update, or delete an all-day Calendar event for
+  that goal on the selected day, titled with just the goal's icon and a
+  ✅/❌ mark (no name). Success events use Calendar's green ("Basil") color;
+  fails use red ("Tomato").
 - A date-navigation row at the top of the card (◀ *date* ▶) moves one day
   back/forward in place. Tapping the date itself opens a date picker so you
   can jump straight to any day, not just step through one at a time.
@@ -25,7 +29,8 @@ check.
   forever** (leaving the field blank does the same).
 - The **✏️ Edit** button on a goal row opens the same form pre-filled with
   that goal's current name, icon, start date, and duration, and saves your
-  changes back to the same goal on submit.
+  changes back to the same goal on submit. This is the only place the goal's
+  name is shown or changed after creation.
 - Each goal has a start date and a duration (in days), or no duration at all
   for a goal that runs forever. This is purely informational: outside a
   fixed-duration goal's window the goal shows a badge ("Starts ..." /
@@ -38,8 +43,13 @@ check.
   Forever goals (duration 0, or goals created before the duration field
   existed) show "∞" for duration/days left and count done/missed from their
   start date (or creation date) through today.
-- Deleting a goal only stops future tracking; it does **not** delete past
-  calendar events, so your history stays intact.
+- Deleting a goal is a **soft delete**: it disappears from the home card and
+  Goal summary, but its definition and all its past calendar events are kept
+  forever — nothing is erased, and there's currently no way to view or
+  restore a deleted goal. A deleted goal can also no longer be marked or
+  edited; if a stale card somehow still tries (e.g. it was open in another
+  tab before you deleted the goal), the add-on shows a notification instead
+  of making the change.
 
 Goal *definitions* (name, icon, start date, duration in days, active flag)
 live in `PropertiesService.getUserProperties()`. Goal *status per day* is not
@@ -114,13 +124,16 @@ covered by the manual test plan below instead.
 ### Manual test plan (run after `npm run push` + reload the add-on)
 
 - [ ] Create a goal with a name, an emoji icon, a start date, and a duration; it appears on the home card.
-- [ ] Mark it "Mark done" for today; a green all-day event with the icon+name+✅ appears on today's date in Calendar.
+- [ ] Mark it "Mark done" for today; a green all-day event titled with the icon and ✅ (no goal name) appears on today's date in Calendar.
+- [ ] Confirm the goal's icon appears large on the home card and in the Goal summary row, with no name shown in either place; confirm all five action buttons (Success/Fail/Clear/Edit/Delete) appear together in one row under the goal.
 - [ ] Mark it "Mark missed" for today; the same event turns red and updates to ❌ (no duplicate event created).
 - [ ] Click "Clear"; the event is removed from the calendar.
 - [ ] Tap the left/right arrows in the date-navigation row; confirm the card updates in place to the previous/next day.
 - [ ] Tap the date itself between the arrows; confirm it opens the date picker, and picking a day jumps straight there.
 - [ ] Create a second goal, confirm both show independently with independent statuses per day.
-- [ ] Delete a goal; confirm it disappears from the home card but its past calendar events remain.
+- [ ] Delete a goal; confirm it disappears from the home card and Goal summary, and a "kept" notification appears.
+- [ ] After deleting a goal, confirm its past calendar events are untouched, and re-opening the add-on never shows it again (no restore path).
+- [ ] From a card that was still open before you deleted a goal elsewhere (or by double-tapping Delete quickly), try to delete/mark/edit that same goal again; confirm it's a harmless no-op / graceful notification, not an error.
 - [ ] Submit the "New goal" form with an empty name; confirm a validation error notification appears and no goal is created.
 - [ ] Submit the "New goal" form with a duration of 0; confirm the goal is created with no window badge, and its Goal summary row shows "∞" for duration/days left.
 - [ ] Submit the "New goal" form with a blank duration; confirm the same forever behavior as duration 0.

@@ -92,12 +92,12 @@ describe('CalendarService', function () {
   });
 
   describe('buildEventTitle', function () {
-    it('includes icon, name, and a success mark', function () {
-      expect(CalendarService.buildEventTitle(goal, 'success')).toBe('🏃 Run 3 miles ✅');
+    it('includes icon and a success mark', function () {
+      expect(CalendarService.buildEventTitle(goal, 'success')).toBe('🏃 ✅');
     });
 
     it('includes a fail mark for fail status', function () {
-      expect(CalendarService.buildEventTitle(goal, 'fail')).toBe('🏃 Run 3 miles ❌');
+      expect(CalendarService.buildEventTitle(goal, 'fail')).toBe('🏃 ❌');
     });
   });
 
