@@ -69,22 +69,22 @@ describe('GoalService', function () {
       }).toThrow('60 characters');
     });
 
-    it('throws when icon exceeds 4 characters', function () {
-      expect(function () {
-        GoalService.validateGoalInput(validGoalInput({ icon: 'toolong' }));
-      }).toThrow('4 characters');
-    });
-
     it('accepts valid input without throwing', function () {
       expect(function () {
         GoalService.validateGoalInput(validGoalInput());
       }).not.toThrow();
     });
 
-    it('accepts a compound ZWJ emoji even though it is >4 UTF-16 units', function () {
-      // "person running: female sign" = runner + ZWJ + female sign + VS16 = 4 code points, 7 UTF-16 units
+    it('accepts a long compound ZWJ emoji sequence (no length limit on icon)', function () {
+      // "woman lifting weights" = weight lifter + VS16 + ZWJ + female sign + VS16 = 5 code points
       expect(function () {
-        GoalService.validateGoalInput(validGoalInput({ icon: '🏃‍♀️' }));
+        GoalService.validateGoalInput(validGoalInput({ icon: '🏋️‍♀️' }));
+      }).not.toThrow();
+    });
+
+    it('accepts a plain multi-character icon string', function () {
+      expect(function () {
+        GoalService.validateGoalInput(validGoalInput({ icon: 'toolong' }));
       }).not.toThrow();
     });
 

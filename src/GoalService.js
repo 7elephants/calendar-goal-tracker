@@ -64,12 +64,6 @@ function validateGoalInput(input) {
   if (!icon) {
     throw new Error('Goal icon (emoji or short text) is required.');
   }
-  // Array.from splits on code points rather than UTF-16 units, so compound
-  // emoji (skin-tone modifiers, ZWJ sequences like family/profession emoji)
-  // aren't rejected just for being multi-unit under .length.
-  if (Array.from(icon).length > 4) {
-    throw new Error('Goal icon must be 4 characters or fewer (emoji recommended).');
-  }
   if (!isValidDateKey(input.startDate)) {
     throw new Error('A valid start date is required.');
   }
