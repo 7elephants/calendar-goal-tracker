@@ -6,7 +6,7 @@
  *   steps:
  *     - step: 1
  *       call: "validateGoalInput(input)"
- *       input: "{ name: string, icon: string, startDate: 'YYYY-MM-DD', durationDays: integer }"
+ *       input: "{ name: string, icon: string, startDate: 'YYYY-MM-DD', durationDays: integer, goalType: 'passFail'|'countOnly' }"
  *       output: "throws Error on invalid input, otherwise returns void"
  *     - step: 2
  *       call: "listGoals()"
@@ -14,7 +14,7 @@
  *       output: "Array<Goal> read from PropertiesService.getUserProperties()"
  *     - step: 3
  *       call: "createGoal(input)"
- *       input: "{ name: string, icon: string, startDate: 'YYYY-MM-DD', durationDays: integer }"
+ *       input: "{ name: string, icon: string, startDate: 'YYYY-MM-DD', durationDays: integer, goalType: 'passFail'|'countOnly' }"
  *       output: "newly created Goal object, persisted to user properties"
  *     - step: 4
  *       call: "updateGoal(goalId, updates)"
@@ -77,6 +77,9 @@ function validateGoalInput(input) {
       'Duration must be a whole number of days between 0 and ' + MAX_DURATION_DAYS + ' (0 = forever).'
     );
   }
+  if (input.goalType !== 'passFail' && input.goalType !== 'countOnly') {
+    throw new Error('Goal type must be Pass/Fail or Count only.');
+  }
 }
 
 function readGoalsFromStorage() {
@@ -123,6 +126,7 @@ function createGoal(input) {
     icon: input.icon.trim(),
     startDate: input.startDate,
     durationDays: input.durationDays,
+    goalType: input.goalType,
     active: true,
     createdAt: new Date().toISOString()
   };
@@ -164,6 +168,9 @@ function updateGoal(goalId, updates) {
   }
   if (updates && typeof updates.durationDays === 'number') {
     target.durationDays = updates.durationDays;
+  }
+  if (updates && typeof updates.goalType === 'string') {
+    target.goalType = updates.goalType;
   }
   validateGoalInput(target);
   writeGoalsToStorage(goals);

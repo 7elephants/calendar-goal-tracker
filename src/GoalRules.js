@@ -16,6 +16,10 @@
  *       call: "GoalRules.isForever(goal)"
  *       input: "goal: Goal"
  *       output: "true if the goal has no fixed window (durationDays: 0, or missing entirely) - the negation of CalendarService.goalHasWindow"
+ *     - step: 4
+ *       call: "GoalRules.isCountOnly(goal)"
+ *       input: "goal: Goal"
+ *       output: "true if goal.goalType === 'countOnly' (a goal that only tallies days marked done, with no 'missed' status); false for 'passFail' goals and for legacy goals with no stored goalType at all, which are treated as passFail"
  * ---
  */
 
@@ -31,10 +35,15 @@ function isForever(goal) {
   return !goalHasWindow(goal);
 }
 
+function isCountOnly(goal) {
+  return goal.goalType === 'countOnly';
+}
+
 var GoalRules = {
   windowStatus: getGoalWindowStatus,
   summaryStats: getGoalSummaryStats,
-  isForever: isForever
+  isForever: isForever,
+  isCountOnly: isCountOnly
 };
 
 // eslint-disable-next-line no-undef

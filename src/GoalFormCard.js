@@ -7,7 +7,7 @@
  *     - step: 1
  *       call: "buildGoalFormSection_(prefill)"
  *       input: "prefill: Goal | null - null for a fresh goal, an existing Goal for editing"
- *       output: "CardService.CardSection with name/icon TextInputs, a start-date DatePicker, and a duration-in-days TextInput (hinted that 0 means forever), pre-filled when prefill is given"
+ *       output: "CardService.CardSection with name/icon TextInputs, a Pass/Fail vs Count only radio SelectionInput, a start-date DatePicker, and a duration-in-days TextInput (hinted that 0 means forever), pre-filled when prefill is given"
  *     - step: 2
  *       call: "buildCreateGoalCard()"
  *       input: "none"
@@ -21,12 +21,14 @@
 
 /**
  * Shared by buildCreateGoalCard/buildEditGoalCard. `prefill` is null for a
- * fresh goal (defaults to today's start date, blank name/icon/duration), or
- * an existing Goal for editing. Goals created before startDate/durationDays
- * existed (or a forever goal, durationDays: 0) fall back the same way here
- * as they do everywhere else in the app: missing startDate defaults to
- * today, missing/0 durationDays pre-fills as "0" (forever) rather than the
- * literal string "undefined".
+ * fresh goal (defaults to today's start date, blank name/icon/duration,
+ * Pass/Fail type), or an existing Goal for editing. Goals created before
+ * startDate/durationDays existed (or a forever goal, durationDays: 0) fall
+ * back the same way here as they do everywhere else in the app: missing
+ * startDate defaults to today, missing/0 durationDays pre-fills as "0"
+ * (forever) rather than the literal string "undefined". Likewise, a legacy
+ * goal with no stored goalType pre-fills as Pass/Fail (GoalRules.isCountOnly
+ * treats a missing goalType the same way).
  */
 function buildGoalFormSection_(prefill) {
   var nameInput = CardService.newTextInput()
@@ -37,6 +39,13 @@ function buildGoalFormSection_(prefill) {
     .setFieldName('goalIcon')
     .setTitle('Icon / emoji')
     .setHint('e.g. 🏃');
+  var isCountOnly = !!prefill && GoalRules.isCountOnly(prefill);
+  var typeInput = CardService.newSelectionInput()
+    .setType(CardService.SelectionInputType.RADIO_BUTTON)
+    .setFieldName('goalType')
+    .setTitle('Type')
+    .addItem('Pass / Fail - mark each day done or missed', 'passFail', !isCountOnly)
+    .addItem('Count only - just tally the days you did it', 'countOnly', isCountOnly);
   var startDateInput = CardService.newDatePicker()
     .setFieldName('goalStartDate')
     .setTitle('Start date')
@@ -55,6 +64,7 @@ function buildGoalFormSection_(prefill) {
   return CardService.newCardSection()
     .addWidget(nameInput)
     .addWidget(iconInput)
+    .addWidget(typeInput)
     .addWidget(startDateInput)
     .addWidget(durationInput);
 }

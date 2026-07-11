@@ -17,7 +17,10 @@ function makeUserPropertiesMock() {
 }
 
 function validGoalInput(overrides) {
-  return Object.assign({ name: 'Run', icon: '🏃', startDate: '2026-07-08', durationDays: 30 }, overrides);
+  return Object.assign(
+    { name: 'Run', icon: '🏃', startDate: '2026-07-08', durationDays: 30, goalType: 'passFail' },
+    overrides
+  );
 }
 
 describe('GoalService', function () {
@@ -129,6 +132,24 @@ describe('GoalService', function () {
         GoalService.validateGoalInput(validGoalInput({ durationDays: 3651 }));
       }).toThrow('Duration must be');
     });
+
+    it('accepts goalType countOnly', function () {
+      expect(function () {
+        GoalService.validateGoalInput(validGoalInput({ goalType: 'countOnly' }));
+      }).not.toThrow();
+    });
+
+    it('throws when goalType is missing', function () {
+      expect(function () {
+        GoalService.validateGoalInput(validGoalInput({ goalType: undefined }));
+      }).toThrow('Goal type must be');
+    });
+
+    it('throws when goalType is not one of the two allowed values', function () {
+      expect(function () {
+        GoalService.validateGoalInput(validGoalInput({ goalType: 'weekly' }));
+      }).toThrow('Goal type must be');
+    });
   });
 
   describe('listGoals', function () {
@@ -164,6 +185,11 @@ describe('GoalService', function () {
     it('creates a goal with durationDays 0 to mean it runs forever', function () {
       var goal = GoalService.createGoal(validGoalInput({ durationDays: 0 }));
       expect(goal.durationDays).toBe(0);
+    });
+
+    it('creates a countOnly goal', function () {
+      var goal = GoalService.createGoal(validGoalInput({ goalType: 'countOnly' }));
+      expect(goal.goalType).toBe('countOnly');
     });
   });
 
@@ -211,6 +237,13 @@ describe('GoalService', function () {
 
       expect(updated.startDate).toBe('2026-08-01');
       expect(updated.durationDays).toBe(60);
+    });
+
+    it('updates goalType from passFail to countOnly', function () {
+      var created = GoalService.createGoal(validGoalInput({ name: 'Workout', icon: '🏋️' }));
+      var updated = GoalService.updateGoal(created.id, { goalType: 'countOnly' });
+
+      expect(updated.goalType).toBe('countOnly');
     });
 
     it('updates durationDays to 0 to make a fixed-duration goal run forever', function () {

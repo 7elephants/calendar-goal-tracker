@@ -71,4 +71,18 @@ describe('GoalRules', function () {
       expect(GoalRules.isForever({ startDate: '2026-07-01', durationDays: 30 })).toBe(false);
     });
   });
+
+  describe('isCountOnly', function () {
+    it('returns true for a countOnly goal', function () {
+      expect(GoalRules.isCountOnly({ goalType: 'countOnly' })).toBe(true);
+    });
+
+    it('returns false for a passFail goal', function () {
+      expect(GoalRules.isCountOnly({ goalType: 'passFail' })).toBe(false);
+    });
+
+    it('returns false for a legacy goal with no stored goalType', function () {
+      expect(GoalRules.isCountOnly({})).toBe(false);
+    });
+  });
 });
