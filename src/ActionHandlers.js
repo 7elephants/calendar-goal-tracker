@@ -7,10 +7,10 @@
  *     - step: 1
  *       call: "handleMarkStatus(e)"
  *       input: "e.parameters: { goalId, dateKey, status: 'success'|'fail'|'clear' }"
- *       output: "ActionResponse that updates the card in place via CalendarService.setGoalStatus(), or a notification (no Calendar write) if the goal is missing, soft-deleted (active: false), or the Calendar API call fails"
+ *       output: "ActionResponse that updates the card in place via CalendarService.setGoalStatus(), or a notification (no Calendar write) if the goal is missing, soft-deleted (active: false), status is 'fail' against a Count only goal (GoalRules.isCountOnly), or the Calendar API call fails"
  *     - step: 2
  *       call: "handleOpenCreateGoalCard(e) / handleCreateGoalSubmit(e) / handleOpenEditGoalCard(e) / handleEditGoalSubmit(e)"
- *       input: "e.parameters: { goalId } (edit only, identifies which goal to open/save) plus e.formInput: { goalName, goalIcon, goalStartDate, goalDurationDays }"
+ *       input: "e.parameters: { goalId } (edit only, identifies which goal to open/save) plus e.formInput: { goalName, goalIcon, goalType, goalStartDate, goalDurationDays }"
  *       output: "ActionResponse that pushes the create/edit form card, or (on submit) saves via GoalService.createGoal()/updateGoal() and pops back to an updated home card. Both submit handlers build their GoalService input via the shared parseGoalFormInput_(formInput, fallbackStartDate) helper. handleOpenEditGoalCard rejects with a notification instead of pushing the card if the goal is soft-deleted (active: false); handleEditGoalSubmit needs no separate check for that since GoalService.updateGoal() itself throws for a soft-deleted goal, which the existing try/catch surfaces as a notification."
  *     - step: 3
  *       call: "handleOpenDatePickerCard(e) / handleGoToDate(e) / handleShiftDay(e) / handleDeleteGoal(e)"
@@ -35,6 +35,13 @@ function handleMarkStatus(e) {
   }
   if (goal.active === false) {
     return deletedGoalNotification_('marked');
+  }
+  if (params.status === 'fail' && GoalRules.isCountOnly(goal)) {
+    return CardService.newActionResponseBuilder()
+      .setNotification(
+        CardService.newNotification().setText('This goal only tracks days done; there is no missed status to set.')
+      )
+      .build();
   }
 
   var date = dateKeyToDate_(params.dateKey);

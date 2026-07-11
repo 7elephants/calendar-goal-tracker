@@ -11,7 +11,7 @@
  *     - step: 2
  *       call: "buildHomeCard(dateKey, goalsWithStatus)"
  *       input: "dateKey: 'YYYY-MM-DD', goalsWithStatus: Array<{ goal: Goal, status: string|null, summary: CalendarService.getGoalSummaryStats() result }>"
- *       output: "CardService.Card with no CardHeader (title is required by CardHeader so an empty one is unsafe; the add-on's own name in Calendar's chrome already labels the card). First widget is a date-nav row (chevron_left/chevron_right call handleShiftDay to move +/-1 day in place; the date label between them calls handleOpenDatePickerCard). Then today's goals, one row per goal: a DecoratedText whose primary text is the goal's icon plus its status mark (large - DecoratedText's topLabel/bottomLabel captions render smaller than its main text, and CardService text widgets have no font-size control, so the icon lives in the main text slot to appear bigger; the goal name is intentionally not shown on the home card at all) immediately followed by a single ButtonSet with all five actions (Mark done/Mark missed/Clear/Edit/Delete) grouped together, since DecoratedText's own trailing slot only accepts one button, not a set. Then a read-only 'Goal summary' section (same icon-plus-text layout: icon, duration, days left/done/missed per goal; duration/days-left render as '∞' for forever goals, i.e. GoalRules.isForever(goal)), and a Create goal action."
+ *       output: "CardService.Card with no CardHeader (title is required by CardHeader so an empty one is unsafe; the add-on's own name in Calendar's chrome already labels the card). First widget is a date-nav row (chevron_left/chevron_right call handleShiftDay to move +/-1 day in place; the date label between them calls handleOpenDatePickerCard). Then today's goals, one row per goal: a DecoratedText whose primary text is the goal's icon plus its status mark (large - DecoratedText's topLabel/bottomLabel captions render smaller than its main text, and CardService text widgets have no font-size control, so the icon lives in the main text slot to appear bigger; the goal name is intentionally not shown on the home card at all) immediately followed by a single ButtonSet grouping Mark done/Clear/Edit/Delete plus Mark missed (omitted entirely for a Count only goal - GoalRules.isCountOnly(goal) - since it has no 'missed' concept), since DecoratedText's own trailing slot only accepts one button, not a set. Then a read-only 'Goal summary' section (same icon-plus-text layout: icon, duration, days left/done counts, plus a missed count for Pass/Fail goals only; duration/days-left render as '∞' for forever goals, i.e. GoalRules.isForever(goal)), and a Create goal action."
  * ---
  */
 
@@ -42,15 +42,19 @@ function formatWindowBadge(goal, dateKey) {
   return null;
 }
 
-function formatGoalSummaryLine(stats) {
+function formatGoalSummaryLine(goal, stats) {
   var durationLabel = stats.durationDays !== null ? stats.durationDays + ' days' : '∞';
   var daysLeftLabel = (stats.daysLeft !== null ? stats.daysLeft : '∞') + ' left';
-  return 'Duration: ' + durationLabel + '  ·  ' + daysLeftLabel + '  ·  ✅ ' + stats.daysDone + '  ·  ❌ ' + stats.daysMissed;
+  var line = 'Duration: ' + durationLabel + '  ·  ' + daysLeftLabel + '  ·  ✅ ' + stats.daysDone;
+  if (!GoalRules.isCountOnly(goal)) {
+    line += '  ·  ❌ ' + stats.daysMissed;
+  }
+  return line;
 }
 
 function buildGoalSummaryRowWidget(goal, stats) {
   return CardService.newDecoratedText()
-    .setText(goal.icon + '&nbsp;' + formatGoalSummaryLine(stats))
+    .setText(goal.icon + '&nbsp;' + formatGoalSummaryLine(goal, stats))
     .setWrapText(true);
 }
 
@@ -116,44 +120,51 @@ function buildGoalRowWidget(goal, dateKey, status) {
     decoratedText.setBottomLabel(windowBadge);
   }
 
-  var buttonSet = CardService.newButtonSet()
-    .addButton(
-      CardService.newTextButton()
-        .setMaterialIcon(CardService.newMaterialIcon().setName('check_circle'))
-        .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
-        .setBackgroundColor(GOAL_COLOR_SUCCESS)
-        .setOnClickAction(successAction)
-        .setAltText('Mark done')
-    )
-    .addButton(
+  var buttonSet = CardService.newButtonSet();
+
+  buttonSet.addButton(
+    CardService.newTextButton()
+      .setMaterialIcon(CardService.newMaterialIcon().setName('check_circle'))
+      .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+      .setBackgroundColor(GOAL_COLOR_SUCCESS)
+      .setOnClickAction(successAction)
+      .setAltText('Mark done')
+  );
+
+  // Count-only goals have no "missed" concept, so there's nothing to fail -
+  // the button is simply not offered rather than disabled.
+  if (!GoalRules.isCountOnly(goal)) {
+    buttonSet.addButton(
       CardService.newTextButton()
         .setMaterialIcon(CardService.newMaterialIcon().setName('cancel'))
         .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
         .setBackgroundColor(GOAL_COLOR_FAIL)
         .setOnClickAction(failAction)
         .setAltText('Mark failed')
-    )
-    .addButton(
-      CardService.newTextButton()
-        .setMaterialIcon(CardService.newMaterialIcon().setName('undo'))
-        .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
-        .setOnClickAction(clearAction)
-        .setAltText('Clear')
-    )
-    .addButton(
-      CardService.newTextButton()
-        .setMaterialIcon(CardService.newMaterialIcon().setName('edit'))
-        .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
-        .setOnClickAction(editAction)
-        .setAltText('Edit')
-    )
-    .addButton(
-      CardService.newTextButton()
-        .setMaterialIcon(CardService.newMaterialIcon().setName('delete'))
-        .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
-        .setOnClickAction(deleteAction)
-        .setAltText('Delete')
     );
+  }
+
+  buttonSet.addButton(
+    CardService.newTextButton()
+      .setMaterialIcon(CardService.newMaterialIcon().setName('undo'))
+      .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
+      .setOnClickAction(clearAction)
+      .setAltText('Clear')
+  );
+  buttonSet.addButton(
+    CardService.newTextButton()
+      .setMaterialIcon(CardService.newMaterialIcon().setName('edit'))
+      .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
+      .setOnClickAction(editAction)
+      .setAltText('Edit')
+  );
+  buttonSet.addButton(
+    CardService.newTextButton()
+      .setMaterialIcon(CardService.newMaterialIcon().setName('delete'))
+      .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
+      .setOnClickAction(deleteAction)
+      .setAltText('Delete')
+  );
 
   return { decoratedText: decoratedText, buttonSet: buttonSet };
 }

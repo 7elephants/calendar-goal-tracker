@@ -18,8 +18,8 @@
  *       output: "ActionResponse notification shown when acting on a soft-deleted goal (active: false)"
  *     - step: 4
  *       call: "parseGoalFormInput_(formInput, fallbackStartDate)"
- *       input: "e.formInput: { goalName, goalIcon, goalStartDate, goalDurationDays }, fallbackStartDate: 'YYYY-MM-DD' used when the DatePicker value is unusable"
- *       output: "{ name, icon, startDate, durationDays } for GoalService.createGoal()/updateGoal(). A blank duration field means 'forever' (durationDays: 0), same as explicitly typing 0 - see validateGoalInput in GoalService.js."
+ *       input: "e.formInput: { goalName, goalIcon, goalType, goalStartDate, goalDurationDays }, fallbackStartDate: 'YYYY-MM-DD' used when the DatePicker value is unusable"
+ *       output: "{ name, icon, goalType, startDate, durationDays } for GoalService.createGoal()/updateGoal(). A blank duration field means 'forever' (durationDays: 0), same as explicitly typing 0 - see validateGoalInput in GoalService.js. goalType's SelectionInput value may arrive as a bare string or a single-element array depending on the runtime, same ambiguity as the DatePicker's e.formInput shape - both are normalized here."
  *     - step: 5
  *       call: "buildHomeCardForDate_(dateKey) / buildHomeCardOrErrorCard_(dateKey)"
  *       input: "dateKey: 'YYYY-MM-DD'"
@@ -72,9 +72,11 @@ function deletedGoalNotification_(actionVerb) {
 function parseGoalFormInput_(formInput, fallbackStartDate) {
   var startDate = datePickerValueToDateKey_(formInput.goalStartDate) || fallbackStartDate;
   var durationDays = formInput.goalDurationDays ? Number(formInput.goalDurationDays) : 0;
+  var goalType = Array.isArray(formInput.goalType) ? formInput.goalType[0] : formInput.goalType;
   return {
     name: formInput.goalName,
     icon: formInput.goalIcon,
+    goalType: goalType,
     startDate: startDate,
     durationDays: durationDays
   };
