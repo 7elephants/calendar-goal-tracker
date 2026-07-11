@@ -5,3 +5,4 @@ coverage/
 .clasprc.json
 *.log
 .DS_Store
+.claude/
