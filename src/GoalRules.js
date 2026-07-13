@@ -11,7 +11,7 @@
  *     - step: 2
  *       call: "GoalRules.summaryStats(goal, todayDateKey)"
  *       input: "same as CalendarService.getGoalSummaryStats, which this aliases directly"
- *       output: "{ durationDays, daysLeft, daysDone, daysMissed }"
+ *       output: "{ durationDays, daysLeft, daysDone, daysMissed, currentStreak, todayWindowStatus }"
  *     - step: 3
  *       call: "GoalRules.isForever(goal)"
  *       input: "goal: Goal"

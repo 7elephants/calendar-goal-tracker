@@ -29,9 +29,13 @@
  *       input: "goal: Goal (with optional startDate/durationDays), dateKey: 'YYYY-MM-DD'"
  *       output: "'upcoming' | 'active' | 'completed' | null (null for goals with no window, e.g. forever goals or ones created before this feature)"
  *     - step: 7
+ *       call: "getGoalStatusByDate(goalId, fromDateKey, toDateKeyExclusive) / calculateStreak(statusByDate, todayDateKey)"
+ *       input: "goalId/date range for the former; a getGoalStatusByDate result plus todayDateKey for the latter"
+ *       output: "getGoalStatusByDate: { dateKey: 'success'|'fail' } map, paginating Calendar.Events.list. calculateStreak: consecutive-days-done count walking backward from todayDateKey - an unmarked today doesn't break it (starts the walk from yesterday instead), but an explicit 'fail' on today resets it to 0 immediately; the first non-'success' day found otherwise (fail, or unmarked) stops the count."
+ *     - step: 8
  *       call: "getGoalSummaryStats(goal, todayDateKey)"
  *       input: "goal: Goal, todayDateKey: 'YYYY-MM-DD'"
- *       output: "{ durationDays, daysLeft, daysDone, daysMissed } for the homepage summary section; durationDays/daysLeft are null (rendered as infinite) for goals with no window. Internally paginates Calendar.Events.list via getGoalStatusCounts()."
+ *       output: "{ durationDays, daysLeft, daysDone, daysMissed, currentStreak } for the homepage summary section; durationDays/daysLeft are null (rendered as infinite) for goals with no window. currentStreak is always computed regardless of goal type/window state - the caller (HomeCard.js) decides whether to display it, same as daysMissed already being hidden for Count-only goals. Fetches getGoalStatusByDate once and derives both the daysDone/daysMissed tally and currentStreak from it, rather than querying Calendar twice."
  * ---
  */
 
@@ -159,12 +163,14 @@ function getGoalWindowStatus(goal, dateKey) {
 }
 
 /**
- * Tallies success/fail status events for a goal within [fromDateKey,
- * toDateKeyExclusive), paginating through Calendar.Events.list since a
- * long-running goal can have more results than one page returns.
+ * Maps each tagged status event for a goal within [fromDateKey,
+ * toDateKeyExclusive) to its dateKey, paginating through Calendar.Events.list
+ * since a long-running goal can have more results than one page returns.
+ * Powers both the done/missed tally and the streak calculation in
+ * getGoalSummaryStats, so a given range is only queried once per summary.
  */
-function getGoalStatusCounts(goalId, fromDateKey, toDateKeyExclusive) {
-  var counts = { success: 0, fail: 0 };
+function getGoalStatusByDate(goalId, fromDateKey, toDateKeyExclusive) {
+  var statusByDate = {};
   var pageToken;
   do {
     var response = Calendar.Events.list(CALENDAR_ID, {
@@ -176,16 +182,49 @@ function getGoalStatusCounts(goalId, fromDateKey, toDateKeyExclusive) {
       pageToken: pageToken
     });
     (response.items || []).forEach(function (event) {
-      var status = event.extendedProperties && event.extendedProperties.private && event.extendedProperties.private.status;
-      if (status === 'success') {
-        counts.success++;
-      } else if (status === 'fail') {
-        counts.fail++;
+      var props = event.extendedProperties && event.extendedProperties.private;
+      var status = props && props.status;
+      if (props && props.dateKey && (status === 'success' || status === 'fail')) {
+        statusByDate[props.dateKey] = status;
       }
     });
     pageToken = response.nextPageToken;
   } while (pageToken);
+  return statusByDate;
+}
+
+function tallyStatuses(statusByDate) {
+  var counts = { success: 0, fail: 0 };
+  Object.keys(statusByDate).forEach(function (dateKey) {
+    counts[statusByDate[dateKey]]++;
+  });
   return counts;
+}
+
+/**
+ * Current consecutive-days-done streak, walking backward from todayDateKey
+ * through statusByDate (as returned by getGoalStatusByDate). An unmarked
+ * today doesn't break the streak - it just isn't counted yet, so the walk
+ * starts from yesterday instead. An explicit 'fail' on today resets the
+ * streak to 0 immediately. The first day encountered (working backward)
+ * that isn't 'success' - a 'fail', or simply not marked - stops the count;
+ * dates before the fetched range are implicitly "not marked" the same way.
+ */
+function calculateStreak(statusByDate, todayDateKey) {
+  var dateKey = todayDateKey;
+  if (statusByDate[dateKey] === 'fail') {
+    return 0;
+  }
+  if (statusByDate[dateKey] === undefined) {
+    dateKey = addDaysToDateKey(dateKey, -1);
+  }
+
+  var streak = 0;
+  while (statusByDate[dateKey] === 'success') {
+    streak++;
+    dateKey = addDaysToDateKey(dateKey, -1);
+  }
+  return streak;
 }
 
 /**
@@ -196,7 +235,15 @@ function getGoalStatusCounts(goalId, fromDateKey, toDateKeyExclusive) {
  * created before that field existed) are treated as running forever:
  * durationDays/daysLeft come back null (the caller renders that as "∞"),
  * and daysDone/daysMissed are tallied from startDate (or createdAt, for
- * goals that predate startDate too) through today.
+ * goals that predate startDate too) through today. currentStreak and
+ * todayWindowStatus are always computed (see calculateStreak/
+ * getGoalWindowStatus) regardless of goal type - it's the caller's job to
+ * decide whether a Count-only or upcoming/completed goal should actually
+ * display the streak, same as the existing daysMissed field already being
+ * hidden for Count-only goals at the display layer. todayWindowStatus is
+ * always relative to todayDateKey specifically (not whichever day's card is
+ * being viewed), unlike getGoalWindowStatus's other caller (the per-day
+ * "Starts .../Completed" badge), which does use the viewed day.
  */
 function getGoalSummaryStats(goal, todayDateKey) {
   var hasWindow = goalHasWindow(goal);
@@ -205,7 +252,8 @@ function getGoalSummaryStats(goal, todayDateKey) {
     ? addDaysToDateKey(goal.startDate, goal.durationDays)
     : addDaysToDateKey(todayDateKey, 1);
 
-  var counts = getGoalStatusCounts(goal.id, rangeStart, rangeEndExclusive);
+  var statusByDate = getGoalStatusByDate(goal.id, rangeStart, rangeEndExclusive);
+  var counts = tallyStatuses(statusByDate);
 
   var daysLeft = null;
   if (hasWindow) {
@@ -217,7 +265,9 @@ function getGoalSummaryStats(goal, todayDateKey) {
     durationDays: hasWindow ? goal.durationDays : null,
     daysLeft: daysLeft,
     daysDone: counts.success,
-    daysMissed: counts.fail
+    daysMissed: counts.fail,
+    currentStreak: calculateStreak(statusByDate, todayDateKey),
+    todayWindowStatus: getGoalWindowStatus(goal, todayDateKey)
   };
 }
 
@@ -231,7 +281,8 @@ if (typeof module !== 'undefined') {
     getGoalStatusForDate: getGoalStatusForDate,
     goalHasWindow: goalHasWindow,
     getGoalWindowStatus: getGoalWindowStatus,
-    getGoalStatusCounts: getGoalStatusCounts,
+    getGoalStatusByDate: getGoalStatusByDate,
+    calculateStreak: calculateStreak,
     getGoalSummaryStats: getGoalSummaryStats,
     CALENDAR_ID: CALENDAR_ID,
     APP_TAG: APP_TAG
