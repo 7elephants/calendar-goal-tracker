@@ -11,7 +11,7 @@
  *     - step: 2
  *       call: "buildHomeCard(dateKey, goalsWithStatus)"
  *       input: "dateKey: 'YYYY-MM-DD', goalsWithStatus: Array<{ goal: Goal, status: string|null, summary: CalendarService.getGoalSummaryStats() result (includes todayWindowStatus, always relative to today, not dateKey) }>"
- *       output: "CardService.Card with no CardHeader (title is required by CardHeader so an empty one is unsafe; the add-on's own name in Calendar's chrome already labels the card). First widget is a date-nav row (chevron_left/chevron_right call handleShiftDay to move +/-1 day in place; the date label between them calls handleOpenDatePickerCard). Then today's goals, one row per goal: a DecoratedText whose primary text is the goal's icon plus its status mark (large - DecoratedText's topLabel/bottomLabel captions render smaller than its main text, and CardService text widgets have no font-size control, so the icon lives in the main text slot to appear bigger; the goal name is intentionally not shown on the home card at all) immediately followed by a single ButtonSet grouping Mark done/Clear/Edit/Delete plus Mark missed (omitted entirely for a Count only goal - GoalRules.isCountOnly(goal) - since it has no 'missed' concept), since DecoratedText's own trailing slot only accepts one button, not a set. Then a read-only 'Goal summary' section (same icon-plus-text layout: icon, duration, days left/done counts, plus a missed count and a '🔥 N-day streak' segment for Pass/Fail goals only, and only while today's window status isn't 'upcoming'/'completed'; duration/days-left render as '∞' for forever goals, i.e. GoalRules.isForever(goal)), and a Create goal action."
+ *       output: "CardService.Card with no CardHeader (title is required by CardHeader so an empty one is unsafe; the add-on's own name in Calendar's chrome already labels the card). First widget is a date-nav row (chevron_left/chevron_right call handleShiftDay to move +/-1 day in place; the date label between them calls handleOpenDatePickerCard). Then today's goals, one row per goal: a DecoratedText whose primary text is the goal's icon plus its status mark (large - DecoratedText's topLabel/bottomLabel captions render smaller than its main text, and CardService text widgets have no font-size control, so the icon lives in the main text slot to appear bigger; the goal name is intentionally not shown on the home card at all) immediately followed by a single ButtonSet grouping Mark done/Clear/Edit/Delete plus Mark missed (omitted entirely for a Count only goal - GoalRules.isCountOnly(goal) - since it has no 'missed' concept), since DecoratedText's own trailing slot only accepts one button, not a set. Then a read-only 'Goal summary' section (same icon-plus-text layout: icon, duration, days left/done counts, plus a missed count and a '🔥 N' streak segment for Pass/Fail goals only, and only while today's window status isn't 'upcoming'/'completed'; duration/days-left render as '∞' for forever goals, i.e. GoalRules.isForever(goal)), and an actions section with Create goal and View all goals (AllGoalsCard.buildAllGoalsCard, via handleOpenAllGoalsCard) buttons."
  * ---
  */
 
@@ -207,15 +207,24 @@ function buildHomeCard(dateKey, goalsWithStatus) {
 
   var actionsSection = CardService.newCardSection();
   var newGoalAction = CardService.newAction().setFunctionName('handleOpenCreateGoalCard');
+  var allGoalsAction = CardService.newAction().setFunctionName('handleOpenAllGoalsCard');
   actionsSection.addWidget(
-    CardService.newButtonSet().addButton(
-      CardService.newTextButton()
-        .setText('Create goal')
-        .setMaterialIcon(CardService.newMaterialIcon().setName('add'))
-        .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
-        .setBackgroundColor(GOAL_COLOR_PRIMARY)
-        .setOnClickAction(newGoalAction)
-    )
+    CardService.newButtonSet()
+      .addButton(
+        CardService.newTextButton()
+          .setText('Create goal')
+          .setMaterialIcon(CardService.newMaterialIcon().setName('add'))
+          .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+          .setBackgroundColor(GOAL_COLOR_PRIMARY)
+          .setOnClickAction(newGoalAction)
+      )
+      .addButton(
+        CardService.newTextButton()
+          .setText('View all goals')
+          .setMaterialIcon(CardService.newMaterialIcon().setName('list'))
+          .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
+          .setOnClickAction(allGoalsAction)
+      )
   );
 
   return CardService.newCardBuilder()

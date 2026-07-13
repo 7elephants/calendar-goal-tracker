@@ -85,4 +85,18 @@ describe('GoalRules', function () {
       expect(GoalRules.isCountOnly({})).toBe(false);
     });
   });
+
+  describe('isActive', function () {
+    it('returns true for a goal with active: true', function () {
+      expect(GoalRules.isActive({ active: true })).toBe(true);
+    });
+
+    it('returns false for a soft-deleted goal (active: false)', function () {
+      expect(GoalRules.isActive({ active: false })).toBe(false);
+    });
+
+    it('returns true for a goal with no stored active field at all', function () {
+      expect(GoalRules.isActive({})).toBe(true);
+    });
+  });
 });

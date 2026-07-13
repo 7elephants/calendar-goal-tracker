@@ -67,11 +67,16 @@ right on the calendar grid, no separate app to check.
   as the done/missed counts, always relative to today.
 - Deleting a goal is a **soft delete**: it disappears from the home card and
   Goal summary, but its definition and all its past calendar events are kept
-  forever — nothing is erased, and there's currently no way to view or
-  restore a deleted goal. A deleted goal can also no longer be marked or
+  forever — nothing is erased. A deleted goal can also no longer be marked or
   edited; if a stale card somehow still tries (e.g. it was open in another
   tab before you deleted the goal), the add-on shows a notification instead
-  of making the change.
+  of making the change. There is still no way to *restore* a deleted goal.
+- **View all goals**, next to Create goal, opens a read-only card listing
+  every goal you've ever created — "Active" and "Completed" (soft-deleted)
+  goals in separate sections, each row rendered exactly like a Goal summary
+  row (icon, duration, done/missed counts, streak). This is the only place
+  a deleted goal's data is visible again; there's no restore action here,
+  just a historical record.
 
 Goal *definitions* (name, icon, type, start date, duration in days, active
 flag) live in `PropertiesService.getUserProperties()`. Goal *status per
@@ -91,6 +96,7 @@ src/            Apps Script source (pushed to Google via clasp)
   CodeHelpers.js     Small private helpers shared by Triggers.js/ActionHandlers.js
   HomeCard.js        Home card CardService UI (today's goals + Goal summary)
   GoalFormCard.js    Create/edit goal form CardService UI
+  AllGoalsCard.js    Read-only "View all goals" card, grouped by Active/Completed (soft-deleted)
   MiscCards.js       Small standalone cards (date picker, error card)
   CardTheme.js       Shared button color constants
   GoalService.js     Goal validation + CRUD, backed by PropertiesService
@@ -143,9 +149,9 @@ npm run test:coverage
 `DateKeyUtils.js`, and `CardTheme.js` are unit tested (mocking
 `PropertiesService`/`Calendar` globals where needed) and sit at ~97-100%
 line coverage. `Triggers.js`, `ActionHandlers.js`, `CodeHelpers.js`,
-`HomeCard.js`, `GoalFormCard.js`, and `MiscCards.js` are intentionally
-excluded from coverage collection (see `jest.config.js`) because they are
-thin wiring around `CardService` and Calendar add-on trigger objects
+`HomeCard.js`, `GoalFormCard.js`, `AllGoalsCard.js`, and `MiscCards.js` are
+intentionally excluded from coverage collection (see `jest.config.js`)
+because they are thin wiring around `CardService` and Calendar add-on trigger objects
 (`e.parameters`, `e.formInput`, card navigation) that only exist inside a
 live Google Calendar session with a real OAuth-authenticated add-on
 install. There is no way to instantiate `CardService` outside that runtime,
@@ -191,3 +197,7 @@ covered by the manual test plan below instead.
 - [ ] Confirm a goal with an "upcoming" (Starts ...) or "🏁 Completed" badge never shows a streak segment, even if it has done days recorded.
 - [ ] Confirm a forever Pass/Fail goal (duration 0) shows a streak like any other active Pass/Fail goal.
 - [ ] Reload Calendar entirely and reopen the add-on; confirm goals and today's statuses persist (PropertiesService + Calendar are both durable).
+- [ ] Tap "View all goals"; confirm it opens a card listing every active goal under "Active", with each row formatted exactly like the home card's Goal summary row (icon, duration, done/missed counts, streak where applicable).
+- [ ] Delete a goal, then tap "View all goals"; confirm it now appears under "Completed" instead of "Active", still showing its historical stats, and confirm there is no button to restore it.
+- [ ] With no deleted goals yet, tap "View all goals"; confirm the "Completed" section shows "No completed goals." rather than being blank or missing.
+- [ ] Confirm "View all goals" rows have no action buttons at all (no Mark done/Edit/Delete) — purely read-only, matching the home card's Goal summary section.
