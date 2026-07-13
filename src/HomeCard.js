@@ -59,7 +59,7 @@ function formatGoalSummaryLine(goal, stats) {
   if (!GoalRules.isCountOnly(goal)) {
     line += '  ·  ❌ ' + stats.daysMissed;
     if (stats.todayWindowStatus !== 'upcoming' && stats.todayWindowStatus !== 'completed') {
-      line += '  ·  🔥 ' + stats.currentStreak + '-day streak';
+      line += '  ·  🔥 ' + stats.currentStreak;
     }
   }
   return line;
