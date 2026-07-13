@@ -20,6 +20,10 @@
  *       call: "GoalRules.isCountOnly(goal)"
  *       input: "goal: Goal"
  *       output: "true if goal.goalType === 'countOnly' (a goal that only tallies days marked done, with no 'missed' status); false for 'passFail' goals and for legacy goals with no stored goalType at all, which are treated as passFail"
+ *     - step: 5
+ *       call: "GoalRules.isActive(goal)"
+ *       input: "goal: Goal"
+ *       output: "false only if goal.active === false (soft-deleted via GoalService.deleteGoal); true otherwise, including goals with no stored active field at all"
  * ---
  */
 
@@ -39,11 +43,16 @@ function isCountOnly(goal) {
   return goal.goalType === 'countOnly';
 }
 
+function isActive(goal) {
+  return goal.active !== false;
+}
+
 var GoalRules = {
   windowStatus: getGoalWindowStatus,
   summaryStats: getGoalSummaryStats,
   isForever: isForever,
-  isCountOnly: isCountOnly
+  isCountOnly: isCountOnly,
+  isActive: isActive
 };
 
 // eslint-disable-next-line no-undef

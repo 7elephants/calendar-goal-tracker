@@ -83,9 +83,7 @@ function parseGoalFormInput_(formInput, fallbackStartDate) {
 }
 
 function buildHomeCardForDate_(dateKey) {
-  var goals = listGoals().filter(function (g) {
-    return g.active !== false;
-  });
+  var goals = listGoals().filter(GoalRules.isActive);
   var date = dateKeyToDate_(dateKey);
   var today = todayDateKey_();
 

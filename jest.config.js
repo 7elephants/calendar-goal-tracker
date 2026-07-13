@@ -8,6 +8,7 @@ module.exports = {
     'src/CodeHelpers.js',
     'src/HomeCard.js',
     'src/GoalFormCard.js',
-    'src/MiscCards.js'
+    'src/MiscCards.js',
+    'src/AllGoalsCard.js'
   ]
 };
