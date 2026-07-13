@@ -212,7 +212,6 @@ function buildHomeCard(dateKey, goalsWithStatus) {
     CardService.newButtonSet()
       .addButton(
         CardService.newTextButton()
-          .setText('Create goal')
           .setMaterialIcon(CardService.newMaterialIcon().setName('add'))
           .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
           .setBackgroundColor(GOAL_COLOR_PRIMARY)
@@ -220,7 +219,6 @@ function buildHomeCard(dateKey, goalsWithStatus) {
       )
       .addButton(
         CardService.newTextButton()
-          .setText('View all goals')
           .setMaterialIcon(CardService.newMaterialIcon().setName('list'))
           .setTextButtonStyle(CardService.TextButtonStyle.OUTLINED)
           .setOnClickAction(allGoalsAction)
