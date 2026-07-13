@@ -55,7 +55,7 @@ right on the calendar grid, no separate app to check.
   (duration 0, or goals created before the duration field existed) show "∞"
   for duration/days left and count done (and missed, for Pass/Fail goals)
   from their start date (or creation date) through today.
-- Pass/Fail goals also show a **🔥 N-day streak** in the Goal summary — the
+- Pass/Fail goals also show a **🔥 N** streak count in the Goal summary — the
   number of consecutive days marked done, counting backward from today. A
   day marked failed, or a day with no entry at all, breaks the streak back
   to 0 — except today itself: if you simply haven't logged today yet, the
@@ -183,10 +183,10 @@ covered by the manual test plan below instead.
 - [ ] Tap "Edit" on a goal that predates the start-date/duration feature (no stored startDate/durationDays, if you have one); confirm the form opens without error, pre-filled with today's date and a duration of 0.
 - [ ] In the Goal summary section, confirm each goal shows the right icon, duration, days left, and a done count (plus a missed count for Pass/Fail goals only); mark a few days done (and missed, for a Pass/Fail goal) and confirm the counts update after reopening the add-on.
 - [ ] Confirm the Goal summary numbers don't change when you navigate to a different day (they should stay pinned to today).
-- [ ] Mark a Pass/Fail goal done for 3 consecutive days ending today; confirm the Goal summary shows "🔥 3-day streak".
-- [ ] Mark that same goal failed today; confirm the streak immediately drops to "🔥 0-day streak".
-- [ ] Build a 3-day streak ending yesterday, then reopen the add-on without marking anything for today; confirm the streak still shows "🔥 3-day streak" (today pending doesn't break it yet).
-- [ ] From that same pending state, mark today done; confirm the streak becomes "🔥 4-day streak". Alternatively mark it failed; confirm it becomes "🔥 0-day streak".
+- [ ] Mark a Pass/Fail goal done for 3 consecutive days ending today; confirm the Goal summary shows "🔥 3".
+- [ ] Mark that same goal failed today; confirm the streak immediately drops to "🔥 0".
+- [ ] Build a 3-day streak ending yesterday, then reopen the add-on without marking anything for today; confirm the streak still shows "🔥 3" (today pending doesn't break it yet).
+- [ ] From that same pending state, mark today done; confirm the streak becomes "🔥 4". Alternatively mark it failed; confirm it becomes "🔥 0".
 - [ ] Confirm a Count only goal never shows a streak segment in its Goal summary row.
 - [ ] Confirm a goal with an "upcoming" (Starts ...) or "🏁 Completed" badge never shows a streak segment, even if it has done days recorded.
 - [ ] Confirm a forever Pass/Fail goal (duration 0) shows a streak like any other active Pass/Fail goal.
