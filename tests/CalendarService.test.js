@@ -169,22 +169,21 @@ describe('CalendarService', function () {
     });
   });
 
-  describe('getGoalStatusCounts', function () {
-    it('tallies success and fail events for a goal within range', function () {
+  describe('getGoalStatusByDate', function () {
+    it('maps each dateKey to its status within range', function () {
       CalendarService.setGoalStatus(goal, new Date(2026, 6, 1), 'success');
-      CalendarService.setGoalStatus(goal, new Date(2026, 6, 2), 'success');
-      CalendarService.setGoalStatus(goal, new Date(2026, 6, 3), 'fail');
+      CalendarService.setGoalStatus(goal, new Date(2026, 6, 2), 'fail');
 
-      var counts = CalendarService.getGoalStatusCounts(goal.id, '2026-07-01', '2026-07-08');
-      expect(counts).toEqual({ success: 2, fail: 1 });
+      var statusByDate = CalendarService.getGoalStatusByDate(goal.id, '2026-07-01', '2026-07-08');
+      expect(statusByDate).toEqual({ '2026-07-01': 'success', '2026-07-02': 'fail' });
     });
 
     it('ignores events for other goals', function () {
       CalendarService.setGoalStatus(goal, new Date(2026, 6, 1), 'success');
-      CalendarService.setGoalStatus({ id: 'goal-2', name: 'Other', icon: '🧘' }, new Date(2026, 6, 1), 'fail');
+      CalendarService.setGoalStatus({ id: 'goal-2', name: 'Other', icon: '🧘' }, new Date(2026, 6, 2), 'fail');
 
-      var counts = CalendarService.getGoalStatusCounts(goal.id, '2026-07-01', '2026-07-08');
-      expect(counts).toEqual({ success: 1, fail: 0 });
+      var statusByDate = CalendarService.getGoalStatusByDate(goal.id, '2026-07-01', '2026-07-08');
+      expect(statusByDate).toEqual({ '2026-07-01': 'success' });
     });
 
     it('paginates through multiple pages of results', function () {
@@ -197,18 +196,68 @@ describe('CalendarService', function () {
             calls++;
             if (calls === 1) {
               return {
-                items: [{ extendedProperties: { private: { status: 'success' } } }],
+                items: [{ extendedProperties: { private: { dateKey: '2026-07-01', status: 'success' } } }],
                 nextPageToken: 'page-2'
               };
             }
-            return { items: [{ extendedProperties: { private: { status: 'fail' } } }] };
+            return { items: [{ extendedProperties: { private: { dateKey: '2026-07-15', status: 'fail' } } }] };
           })
         }
       };
 
-      var counts = CalendarService.getGoalStatusCounts('goal-1', '2026-07-01', '2026-08-01');
-      expect(counts).toEqual({ success: 1, fail: 1 });
+      var statusByDate = CalendarService.getGoalStatusByDate('goal-1', '2026-07-01', '2026-08-01');
+      expect(statusByDate).toEqual({ '2026-07-01': 'success', '2026-07-15': 'fail' });
       expect(global.Calendar.Events.list).toHaveBeenCalledTimes(2);
+    });
+
+    it('omits events with no dateKey tagged (defensive - real events always have one)', function () {
+      global.Calendar = {
+        Events: {
+          list: jest.fn(function () {
+            return { items: [{ extendedProperties: { private: { status: 'success' } } }] };
+          })
+        }
+      };
+
+      var statusByDate = CalendarService.getGoalStatusByDate('goal-1', '2026-07-01', '2026-08-01');
+      expect(statusByDate).toEqual({});
+    });
+  });
+
+  describe('calculateStreak', function () {
+    it('counts consecutive success days ending today', function () {
+      var statusByDate = { '2026-07-06': 'success', '2026-07-07': 'success', '2026-07-08': 'success' };
+      expect(CalendarService.calculateStreak(statusByDate, '2026-07-08')).toBe(3);
+    });
+
+    it('returns 0 immediately when today is explicitly marked failed', function () {
+      var statusByDate = { '2026-07-06': 'success', '2026-07-07': 'success', '2026-07-08': 'fail' };
+      expect(CalendarService.calculateStreak(statusByDate, '2026-07-08')).toBe(0);
+    });
+
+    it('does not break the streak when today is simply not marked yet, counting through yesterday', function () {
+      var statusByDate = { '2026-07-06': 'success', '2026-07-07': 'success' };
+      expect(CalendarService.calculateStreak(statusByDate, '2026-07-08')).toBe(2);
+    });
+
+    it('returns 0 when today is unmarked and yesterday was also not a success', function () {
+      var statusByDate = { '2026-07-06': 'success', '2026-07-07': 'fail' };
+      expect(CalendarService.calculateStreak(statusByDate, '2026-07-08')).toBe(0);
+    });
+
+    it('stops at the first fail or unmarked day working backward, not counting further back', function () {
+      var statusByDate = {
+        '2026-07-04': 'success',
+        '2026-07-05': 'fail',
+        '2026-07-06': 'success',
+        '2026-07-07': 'success',
+        '2026-07-08': 'success'
+      };
+      expect(CalendarService.calculateStreak(statusByDate, '2026-07-08')).toBe(3);
+    });
+
+    it('returns 0 for a goal with no marked days at all', function () {
+      expect(CalendarService.calculateStreak({}, '2026-07-08')).toBe(0);
     });
   });
 
@@ -230,6 +279,51 @@ describe('CalendarService', function () {
       expect(stats.daysLeft).toBe(DateKeyUtils.daysBetweenDateKeys('2026-07-08', '2026-07-31'));
       expect(stats.daysDone).toBe(1);
       expect(stats.daysMissed).toBe(1);
+      expect(stats.currentStreak).toBe(0);
+    });
+
+    it('includes a positive currentStreak derived from the same fetched range', function () {
+      var windowedGoal = {
+        id: 'goal-1',
+        name: 'Run 3 miles',
+        icon: '🏃',
+        startDate: '2026-07-01',
+        durationDays: 30,
+        createdAt: '2026-07-01T00:00:00.000Z'
+      };
+      CalendarService.setGoalStatus(windowedGoal, new Date(2026, 6, 6), 'success');
+      CalendarService.setGoalStatus(windowedGoal, new Date(2026, 6, 7), 'success');
+      CalendarService.setGoalStatus(windowedGoal, new Date(2026, 6, 8), 'success');
+
+      var stats = CalendarService.getGoalSummaryStats(windowedGoal, '2026-07-08');
+      expect(stats.currentStreak).toBe(3);
+    });
+
+    it('includes todayWindowStatus matching getGoalWindowStatus for the same goal/date', function () {
+      var windowedGoal = {
+        id: 'goal-1',
+        name: 'Run 3 miles',
+        icon: '🏃',
+        startDate: '2026-07-01',
+        durationDays: 30,
+        createdAt: '2026-07-01T00:00:00.000Z'
+      };
+      var stats = CalendarService.getGoalSummaryStats(windowedGoal, '2026-07-08');
+      expect(stats.todayWindowStatus).toBe('active');
+      expect(stats.todayWindowStatus).toBe(CalendarService.getGoalWindowStatus(windowedGoal, '2026-07-08'));
+    });
+
+    it('reports todayWindowStatus as upcoming for a goal that has not started yet', function () {
+      var upcomingGoal = {
+        id: 'goal-1',
+        name: 'Run 3 miles',
+        icon: '🏃',
+        startDate: '2026-08-01',
+        durationDays: 30,
+        createdAt: '2026-07-01T00:00:00.000Z'
+      };
+      var stats = CalendarService.getGoalSummaryStats(upcomingGoal, '2026-07-08');
+      expect(stats.todayWindowStatus).toBe('upcoming');
     });
 
     it('reports the full duration as daysLeft for a goal that has not started yet', function () {

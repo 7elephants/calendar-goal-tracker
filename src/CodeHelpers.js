@@ -23,7 +23,7 @@
  *     - step: 5
  *       call: "buildHomeCardForDate_(dateKey) / buildHomeCardOrErrorCard_(dateKey)"
  *       input: "dateKey: 'YYYY-MM-DD'"
- *       output: "HomeCard.buildHomeCard() built from GoalService.listGoals() + CalendarService.getGoalStatusForDate() + GoalRules.summaryStats(); buildHomeCardOrErrorCard_ wraps it in a try/catch so a Calendar API failure (quota, transient error, revoked scope) renders an error card instead of crashing the whole add-on."
+ *       output: "HomeCard.buildHomeCard() built from GoalService.listGoals() + CalendarService.getGoalStatusForDate() + GoalRules.summaryStats() (the latter's result now also carries todayWindowStatus - always today's window state, not whichever day is being viewed - so HomeCard.js can decide whether an upcoming/completed goal's streak should be displayed). buildHomeCardOrErrorCard_ wraps it in a try/catch so a Calendar API failure (quota, transient error, revoked scope) renders an error card instead of crashing the whole add-on."
  * ---
  */
 
