@@ -62,6 +62,7 @@ function buildTimeframeSection_(userFromDateKey, userToDateKeyExclusive) {
   var presets = [
     ['This month', 'thisMonth'],
     ['Last 30 days', 'last30'],
+    ['Last 90 days', 'last90'],
     ['This year', 'thisYear']
   ];
   var presetButtons = CardService.newButtonSet();
