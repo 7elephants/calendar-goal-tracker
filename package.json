@@ -1,6 +1,6 @@
 {
   "name": "calendar-goal-tracker",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "description": "Google Calendar add-on (Apps Script) for tracking daily goals/habits as all-day events.",
   "scripts": {

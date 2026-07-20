@@ -9,6 +9,7 @@ module.exports = {
     'src/HomeCard.js',
     'src/GoalFormCard.js',
     'src/MiscCards.js',
-    'src/AllGoalsCard.js'
+    'src/AllGoalsCard.js',
+    'src/GraphsCard.js'
   ]
 };

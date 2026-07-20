@@ -24,6 +24,10 @@
  *       call: "GoalRules.isActive(goal)"
  *       input: "goal: Goal"
  *       output: "false only if goal.active === false (soft-deleted via GoalService.deleteGoal); true otherwise, including goals with no stored active field at all"
+ *     - step: 6
+ *       call: "GoalRules.complianceWindow(goal)"
+ *       input: "same as CalendarService.getGoalComplianceWindow, which this aliases directly"
+ *       output: "{ startDateKey, endDateKeyExclusive }"
  * ---
  */
 
@@ -32,6 +36,7 @@ if (typeof module !== 'undefined') {
   var CalendarService = require('./CalendarService.js');
   var getGoalWindowStatus = CalendarService.getGoalWindowStatus;
   var getGoalSummaryStats = CalendarService.getGoalSummaryStats;
+  var getGoalComplianceWindow = CalendarService.getGoalComplianceWindow;
   var goalHasWindow = CalendarService.goalHasWindow;
 }
 
@@ -50,6 +55,7 @@ function isActive(goal) {
 var GoalRules = {
   windowStatus: getGoalWindowStatus,
   summaryStats: getGoalSummaryStats,
+  complianceWindow: getGoalComplianceWindow,
   isForever: isForever,
   isCountOnly: isCountOnly,
   isActive: isActive
