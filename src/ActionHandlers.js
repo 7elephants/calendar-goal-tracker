@@ -7,7 +7,7 @@
  *     - step: 1
  *       call: "handleMarkStatus(e)"
  *       input: "e.parameters: { goalId, dateKey, status: 'success'|'fail'|'clear' }"
- *       output: "ActionResponse that updates the card in place via CalendarService.setGoalStatus(), or a notification (no Calendar write) if the goal is missing, soft-deleted (!GoalRules.isActive), status is 'fail' against a Count only goal (GoalRules.isCountOnly), or the Calendar API call fails"
+ *       output: "ActionResponse that updates the card in place via CalendarService.setGoalStatus(), or a notification (no Calendar write) if the goal is missing, soft-deleted (!GoalRules.isActive), status is 'fail' against a Count only goal (GoalRules.isCountOnly), or the Calendar API call fails. On a successful write, the notification text comes from CodeHelpers.js's recordAchievementsNotification_(goal, beforeStats, today) - it diffs the goal's stats from just before the write against just after, and if that crossed any achievement threshold, returns a celebration line instead of the usual 'Saved.'."
  *     - step: 2
  *       call: "handleOpenCreateGoalCard(e) / handleCreateGoalSubmit(e) / handleOpenEditGoalCard(e) / handleEditGoalSubmit(e)"
  *       input: "e.parameters: { goalId } (edit only, identifies which goal to open/save) plus e.formInput: { goalName, goalIcon, goalType, goalStartDate, goalDurationDays }"
@@ -24,6 +24,10 @@
  *       call: "handleOpenGraphsCard(e) / handleUpdateGraphsRange(e)"
  *       input: "handleOpenGraphsCard: none. handleUpdateGraphsRange: e.parameters.preset ('thisMonth'|'last30'|'thisYear') from a preset button, or e.formInput.graphFromDate/graphToDate from the Apply range button - see CodeHelpers.js's resolveGraphsRange_ for how these are reconciled."
  *       output: "handleOpenGraphsCard pushes GraphsCard.buildGraphsCard() defaulted to the current month (CodeHelpers.buildGraphsCardOrErrorCard_ via ChartData.presetRange('thisMonth', ...)). handleUpdateGraphsRange resolves the requested range and updates the same card in place (no push/pop, matching handleShiftDay's in-place style) rather than opening a new card."
+ *     - step: 6
+ *       call: "handleOpenAchievementsCard(e)"
+ *       input: "none"
+ *       output: "ActionResponse that pushes AchievementsCard.buildAchievementsCard(), built from AchievementService.groupAchievementsByGoal(listAchievements()). Calls AchievementService.markAllSeen() before pushing, so the Home card's unseen-achievements indicator (see HomeCard.js) is clear by the time this card renders and stays clear until the next new achievement is earned."
  * ---
  */
 
@@ -54,6 +58,8 @@ function handleMarkStatus(e) {
 
   var date = dateKeyToDate_(params.dateKey);
   var status = params.status === 'clear' ? null : params.status;
+  var today = todayDateKey_();
+  var beforeStats = GoalRules.summaryStats(goal, today);
 
   try {
     setGoalStatus(goal, date, status);
@@ -63,10 +69,22 @@ function handleMarkStatus(e) {
       .build();
   }
 
+  var notificationText = recordAchievementsNotification_(goal, beforeStats, today);
+
   var updatedCard = buildHomeCardOrErrorCard_(params.dateKey);
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation().updateCard(updatedCard))
-    .setNotification(CardService.newNotification().setText('Saved.'))
+    .setNotification(CardService.newNotification().setText(notificationText))
+    .build();
+}
+
+function handleOpenAchievementsCard(e) {
+  var groups = groupAchievementsByGoal(listAchievements());
+  markAllSeen();
+
+  var card = buildAchievementsCard(groups);
+  return CardService.newActionResponseBuilder()
+    .setNavigation(CardService.newNavigation().pushCard(card))
     .build();
 }
 

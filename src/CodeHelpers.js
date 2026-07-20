@@ -23,11 +23,15 @@
  *     - step: 5
  *       call: "buildHomeCardForDate_(dateKey) / buildHomeCardOrErrorCard_(dateKey)"
  *       input: "dateKey: 'YYYY-MM-DD'"
- *       output: "HomeCard.buildHomeCard() built from GoalService.listGoals() + CalendarService.getGoalStatusForDate() + GoalRules.summaryStats() (the latter's result now also carries todayWindowStatus - always today's window state, not whichever day is being viewed - so HomeCard.js can decide whether an upcoming/completed goal's streak should be displayed). buildHomeCardOrErrorCard_ wraps it in a try/catch so a Calendar API failure (quota, transient error, revoked scope) renders an error card instead of crashing the whole add-on."
+ *       output: "HomeCard.buildHomeCard() built from GoalService.listGoals() + CalendarService.getGoalStatusForDate() + GoalRules.summaryStats() (the latter's result now also carries todayWindowStatus - always today's window state, not whichever day is being viewed - so HomeCard.js can decide whether an upcoming/completed goal's streak should be displayed), plus AchievementService.countUnseen() so HomeCard.js can show/hide its unseen-achievements banner. buildHomeCardOrErrorCard_ wraps it in a try/catch so a Calendar API failure (quota, transient error, revoked scope) renders an error card instead of crashing the whole add-on."
  *     - step: 6
  *       call: "resolveGraphsRange_(e, todayDateKey) / buildGraphsCardForRange_(fromDateKey, toDateKeyExclusive) / buildGraphsCardOrErrorCard_(fromDateKey, toDateKeyExclusive)"
  *       input: "e: the action event (e.parameters.preset for a preset button, or e.formInput.graphFromDate/graphToDate for the custom-range Apply button), todayDateKey: 'YYYY-MM-DD'; fromDateKey/toDateKeyExclusive: 'YYYY-MM-DD'"
  *       output: "resolveGraphsRange_: { fromDateKey, toDateKeyExclusive } - a preset parameter always wins over any submitted DatePicker values; an invalid/incomplete custom range (missing or end-before-start) falls back to the current month, same as the card's own default. buildGraphsCardForRange_: GraphsCard.buildGraphsCard() built from active goals partitioned by GoalRules.isCountOnly, each fetched once via CalendarService.getGoalStatusByDate() and walked once via ChartData.buildDailySeries() (one call, both series) through the buildSeriesList_ helper. The range's end is clamped to tomorrow so future days never appear as a flat 0%/0-count tail. The compliance series (only) is additionally clipped to each goal's own GoalRules.complianceWindow(goal), so a day before a goal started or on/after it ended is excluded from that goal's % math entirely (rendered as a gap, not a 0%) rather than counting as a miss - the count-only series is never clipped this way. buildGraphsCardOrErrorCard_ wraps it in the same try/catch pattern as buildHomeCardOrErrorCard_."
+ *     - step: 7
+ *       call: "recordAchievementsNotification_(goal, beforeStats, todayDateKey)"
+ *       input: "goal: Goal, beforeStats: GoalRules.summaryStats() result taken immediately before handleMarkStatus's Calendar write, todayDateKey: 'YYYY-MM-DD'"
+ *       output: "string notification text: re-reads GoalRules.summaryStats(goal, todayDateKey) now that the write has landed, runs AchievementRules.detectNewAchievements(goal, beforeStats, afterStats), and if anything newly crossed a threshold, persists it via AchievementService.recordAchievements() and returns AchievementRules.celebrationText()'s celebration line. Returns the plain 'Saved.' string otherwise, or if anything in this whole step throws - achievement recording is additive and must never make an already-successful Calendar write look like it failed."
  * ---
  */
 
@@ -69,6 +73,29 @@ function deletedGoalNotification_(actionVerb) {
 }
 
 /**
+ * Shared by handleMarkStatus, after a Calendar write has already succeeded:
+ * diffs the goal's stats from immediately before that write (beforeStats)
+ * against a fresh read taken now, and records any newly-crossed achievement
+ * thresholds. Additive and isolated from the Calendar write it follows - a
+ * storage hiccup here must never make an already-successful write look like
+ * it failed, so any error simply falls back to the plain "Saved." text
+ * rather than surfacing. Returns the notification text to show the user.
+ */
+function recordAchievementsNotification_(goal, beforeStats, todayDateKey) {
+  try {
+    var afterStats = GoalRules.summaryStats(goal, todayDateKey);
+    var newlyEarned = AchievementRules.detectNewAchievements(goal, beforeStats, afterStats);
+    if (newlyEarned.length) {
+      recordAchievements(goal, newlyEarned);
+      return AchievementRules.celebrationText(newlyEarned);
+    }
+  } catch (err) {
+    // Fall through with the plain "Saved." notification.
+  }
+  return 'Saved.';
+}
+
+/**
  * Shared by handleCreateGoalSubmit/handleEditGoalSubmit. A blank duration
  * field means "forever" (durationDays: 0), same as explicitly typing 0 -
  * see validateGoalInput in GoalService.js.
@@ -99,7 +126,7 @@ function buildHomeCardForDate_(dateKey) {
     };
   });
 
-  return buildHomeCard(dateKey, goalsWithStatus);
+  return buildHomeCard(dateKey, goalsWithStatus, countUnseen());
 }
 
 /**

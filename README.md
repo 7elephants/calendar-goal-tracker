@@ -105,10 +105,34 @@ right on the calendar grid, no separate app to check.
   range button for any custom range; a range extending into the future is
   clamped at today so it never plots a flat, meaningless tail. Only active
   (non-deleted) goals are charted.
+- Marking a goal done can earn an **achievement**, tied to that specific
+  goal. There are three families: a 🔥 streak milestone (7/30/100-day
+  streak) for **Pass/Fail** goals; a ✅ total-days-done milestone (10/50/100
+  days) for **Count only** goals, since they have no streak concept; and a
+  🎯/🏁 progress milestone (50%/100% of days done ÷ duration) for any goal
+  that has a fixed duration, regardless of type — a forever goal never earns
+  a progress milestone since it has no target to measure against.
+  Achievements are **re-earnable**: they're detected the moment a mark
+  causes the relevant stat to cross a threshold it wasn't already past (e.g.
+  streak 6→7), not "is it currently true," so a streak that breaks and later
+  climbs back to 7 days earns a second "7-day streak" achievement. The
+  moment you earn one, the usual "Saved." notification becomes a
+  celebration line (e.g. "🎉 🔥 7-day streak!"), or "🎉 N new achievements!"
+  if a single mark crosses more than one threshold at once. The home card
+  also shows a "🏆 N new achievements!" banner above the action buttons
+  until you open the **Achievements** card (next to Graphs), which clears
+  it. That card is a read-only trophy case — every achievement you've ever
+  earned, grouped by goal, newest first within each group — with no
+  locked/upcoming badges shown, only what you've actually unlocked. A
+  soft-deleted goal's past achievements still show there (the same
+  "nothing is truly hidden" precedent as View all goals), since achievement
+  records snapshot the goal's name/icon at the moment they're earned rather
+  than re-reading the (possibly since-changed or deleted) goal.
 
 Goal *definitions* (name, icon, type, start date, duration in days, active
-flag) live in `PropertiesService.getUserProperties()`. Goal *status per
-day* is not stored anywhere else — it lives entirely on the Calendar event via
+flag) live in `PropertiesService.getUserProperties()`, and so does the
+*achievements* list (a separate key, append-only). Goal *status per day* is
+not stored anywhere else — it lives entirely on the Calendar event via
 `extendedProperties.private` (`goalId`, `dateKey`, `status`), so the
 calendar is the single source of truth for your history. Goals created
 before this feature existed have no start date/duration stored; they're
@@ -126,13 +150,16 @@ src/            Apps Script source (pushed to Google via clasp)
   GoalFormCard.js    Create/edit goal form CardService UI
   AllGoalsCard.js    Read-only "View all goals" card, grouped by Active/Completed (soft-deleted)
   GraphsCard.js      "Graphs" card: timeframe picker + the two chart images, backed by the built-in Charts service
+  AchievementsCard.js Read-only "Achievements" card, grouped by goal, newest achievement first
   MiscCards.js       Small standalone cards (date picker, error card)
   CardTheme.js       Shared button color constants
   GoalService.js     Goal validation + CRUD, backed by PropertiesService
   CalendarService.js Calendar event read/write + goal window/summary logic, backed by the advanced Calendar API service
-  GoalRules.js       Namespace object grouping goal-first-arg logic (windowStatus/summaryStats/isForever/isCountOnly) for a more objectified call style
+  GoalRules.js       Namespace object grouping goal-first-arg logic (windowStatus/summaryStats/isForever/isCountOnly/complianceWindow) for a more objectified call style
   DateKeyUtils.js    Pure 'YYYY-MM-DD' dateKey math, no Apps Script dependency
   ChartData.js       Pure per-day chart series math (cumulative count, running compliance %) + timeframe presets, no Apps Script dependency
+  AchievementRules.js Pure achievement catalog (streak/count/progress families) + edge-triggered threshold detection, no Apps Script dependency
+  AchievementService.js Achievement CRUD (record/list/count unseen/mark seen/group by goal), backed by PropertiesService
 tests/          Jest unit tests for the pure/testable logic
 README.md       This file
 ```
@@ -176,20 +203,21 @@ npm run test:coverage
 ```
 
 **Coverage note:** `GoalService.js`, `CalendarService.js`, `GoalRules.js`,
-`DateKeyUtils.js`, `CardTheme.js`, and `ChartData.js` are unit tested
-(mocking `PropertiesService`/`Calendar` globals where needed, or — for
-`ChartData.js` — pure with no globals to mock at all) and sit at ~97-100%
-line coverage. `Triggers.js`, `ActionHandlers.js`, `CodeHelpers.js`,
-`HomeCard.js`, `GoalFormCard.js`, `AllGoalsCard.js`, `GraphsCard.js`, and
-`MiscCards.js` are intentionally excluded from coverage collection (see
-`jest.config.js`) because they are thin wiring around `CardService`,
-Calendar add-on trigger objects (`e.parameters`, `e.formInput`, card
-navigation), or (for `GraphsCard.js`) the built-in `Charts`/`Utilities`
-services, that only exist inside a live Google Calendar session with a real
-OAuth-authenticated add-on install. There is no way to instantiate
-`CardService` or `Charts` outside that runtime, so 100% coverage of those
-files isn't achievable with Jest — they're covered by the manual test plan
-below instead.
+`DateKeyUtils.js`, `CardTheme.js`, `ChartData.js`, `AchievementRules.js`,
+and `AchievementService.js` are unit tested (mocking `PropertiesService`/
+`Calendar`/`Utilities` globals where needed, or — for `ChartData.js` and
+`AchievementRules.js` — pure with no globals to mock at all) and sit at
+~97-100% line coverage. `Triggers.js`, `ActionHandlers.js`, `CodeHelpers.js`,
+`HomeCard.js`, `GoalFormCard.js`, `AllGoalsCard.js`, `GraphsCard.js`,
+`AchievementsCard.js`, and `MiscCards.js` are intentionally excluded from
+coverage collection (see `jest.config.js`) because they are thin wiring
+around `CardService`, Calendar add-on trigger objects (`e.parameters`,
+`e.formInput`, card navigation), or (for `GraphsCard.js`) the built-in
+`Charts`/`Utilities` services, that only exist inside a live Google Calendar
+session with a real OAuth-authenticated add-on install. There is no way to
+instantiate `CardService` or `Charts` outside that runtime, so 100%
+coverage of those files isn't achievable with Jest — they're covered by
+the manual test plan below instead.
 
 ### Manual test plan (run after `npm run push` + reload the add-on)
 
@@ -250,3 +278,13 @@ below instead.
 - [ ] Confirm a forever Pass/Fail goal (no stored duration) still has its compliance line start exactly on its start date, but run all the way to the end of the range (or today) with no cutoff.
 - [ ] Select a range that starts and ends entirely before a Pass/Fail goal's start date (or entirely after its end date); confirm that goal's compliance line simply doesn't appear anywhere on the chart for that range.
 - [ ] Confirm a Count only goal's cumulative line is unaffected by its own start date/duration — it should still count every day in the selected range regardless of the goal's own window, since this exclusion only applies to the compliance chart.
+- [ ] Mark a Pass/Fail goal done for 7 consecutive days ending today; confirm the last mark's notification reads "🎉 🔥 7-day streak!" instead of "Saved.", and the home card shows a "🏆 1 new achievement!" banner above the action buttons.
+- [ ] Mark a Count only goal done for its 10th total day; confirm the notification and banner reflect a "✅ 10 days done" achievement instead of a streak.
+- [ ] Mark a windowed goal done on a day that crosses both a streak/count threshold and a 50%/100% progress threshold at once; confirm the notification reads "🎉 2 new achievements!" rather than concatenating both labels.
+- [ ] Tap the "🏆 N new achievements!" banner (or the trophy icon in the actions row); confirm it opens the Achievements card, and that the banner is gone on the next home card render.
+- [ ] In the Achievements card, confirm achievements are grouped by goal (icon + name header) with the newest achievement listed first within each group, each row showing its earned date.
+- [ ] Break a Pass/Fail goal's streak (mark a day failed) after it earned a "7-day streak" achievement, then rebuild the streak back to 7 days; confirm a second "7-day streak" achievement record appears (achievements are re-earnable).
+- [ ] Confirm marking a day missed, or clearing a previously-marked day, never earns an achievement (thresholds only fire on an upward crossing).
+- [ ] Confirm a forever goal (no stored duration) never earns a progress (%) achievement, even after many days done.
+- [ ] Soft-delete a goal that has earned achievements, then open the Achievements card; confirm its trophies are still listed under its original name/icon, and confirm no new achievements can be earned for it (marking it is already blocked entirely for deleted goals).
+- [ ] With no achievements earned yet, open the Achievements card; confirm it shows "No achievements yet. Keep marking your goals!" rather than being blank.
