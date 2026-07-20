@@ -94,19 +94,22 @@ function firstOfNextYearDateKey(dateKey) {
 }
 
 function presetRange(presetId, todayDateKey) {
-  if (presetId === 'last30') {
-    return { fromDateKey: addDaysToDateKey(todayDateKey, -29), toDateKeyExclusive: addDaysToDateKey(todayDateKey, 1) };
-  }
-  if (presetId === 'thisYear') {
-    return {
+  switch (presetId) {
+    case 'last30':
+      return { fromDateKey: addDaysToDateKey(todayDateKey, -29), toDateKeyExclusive: addDaysToDateKey(todayDateKey, 1) };
+    case 'last90':
+      return { fromDateKey: addDaysToDateKey(todayDateKey, -89), toDateKeyExclusive: addDaysToDateKey(todayDateKey, 1) };
+    case 'thisYear':
+      return {
       fromDateKey: firstOfYearDateKey(todayDateKey),
       toDateKeyExclusive: firstOfNextYearDateKey(todayDateKey)
     };
-  }
-  return {
+    default:
+      return {
     fromDateKey: firstOfMonthDateKey(todayDateKey),
     toDateKeyExclusive: firstOfNextMonthDateKey(todayDateKey)
   };
+  }
 }
 
 function labelGoalsByIcon(goals) {
