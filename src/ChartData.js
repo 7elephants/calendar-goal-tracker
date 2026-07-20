@@ -5,9 +5,9 @@
  *   invocation: "Pure chart-math helpers with no Apps Script service dependency, mirroring DateKeyUtils.js. buildDailySeries/labelGoalsByIcon are called by CodeHelpers.js's buildGraphsCardForRange_ (via its buildSeriesList_ helper) to turn a goal's getGoalStatusByDate() map into per-day chart series. presetRange is called both by CodeHelpers.js's resolveGraphsRange_ (a preset button click) and directly by ActionHandlers.js's handleOpenGraphsCard (the current-month default on first open)."
  *   steps:
  *     - step: 1
- *       call: "buildDailySeries(statusByDate, fromDateKey, toDateKeyExclusive)"
- *       input: "statusByDate: { dateKey: 'success'|'fail' } (as returned by CalendarService.getGoalStatusByDate), fromDateKey/toDateKeyExclusive: 'YYYY-MM-DD'"
- *       output: "{ dateKeys, cumulativeCount, compliancePct } - three equal-length arrays, one entry per day in [fromDateKey, toDateKeyExclusive). cumulativeCount resets to 0 at fromDateKey (not a lifetime total) and increments on each 'success' day. compliancePct is successCount-so-far / days-elapsed-so-far * 100, rounded - an unmarked or 'fail' day leaves the numerator flat while the denominator grows, so it drags the running percentage down."
+ *       call: "buildDailySeries(statusByDate, fromDateKey, toDateKeyExclusive, complianceWindow)"
+ *       input: "statusByDate: { dateKey: 'success'|'fail' } (as returned by CalendarService.getGoalStatusByDate), fromDateKey/toDateKeyExclusive: 'YYYY-MM-DD', complianceWindow: optional { startDateKey, endDateKeyExclusive } (as returned by CalendarService.getGoalComplianceWindow / GoalRules.complianceWindow)"
+ *       output: "{ dateKeys, cumulativeCount, compliancePct } - three equal-length arrays, one entry per day in [fromDateKey, toDateKeyExclusive). cumulativeCount resets to 0 at fromDateKey (not a lifetime total) and increments on each 'success' day, regardless of complianceWindow - it's only ever used for the Count-only chart, which this feature doesn't touch. compliancePct is successCount-so-far / days-elapsed-so-far * 100 (rounded) counted only over days within complianceWindow when one is given; a day outside it (before the goal started, or on/after its end) is neither a hit nor a miss - it's excluded from both the running numerator and denominator, and comes back as null so the caller can render a gap there instead of a value. Omitting complianceWindow preserves the original whole-range behavior exactly."
  *     - step: 2
  *       call: "presetRange(presetId, todayDateKey)"
  *       input: "presetId: 'thisMonth' | 'last30' | 'thisYear' (anything else falls back to 'thisMonth'), todayDateKey: 'YYYY-MM-DD'"
@@ -28,25 +28,44 @@ if (typeof module !== 'undefined') {
 
 /**
  * Walks each day in [fromDateKey, toDateKeyExclusive) once, deriving both
- * chart series from the same running successCount so a goal's status map is
- * only walked a single time per range.
+ * chart series from the same walk so a goal's status map is only walked a
+ * single time per range. cumulativeCount and compliancePct are tracked with
+ * separate running counters: cumulativeCount's counts unconditionally,
+ * while compliancePct's only advance on days inside complianceWindow (when
+ * given), so a goal's own start/end can gate the % chart without touching
+ * the count chart's semantics at all.
  */
-function buildDailySeries(statusByDate, fromDateKey, toDateKeyExclusive) {
+function buildDailySeries(statusByDate, fromDateKey, toDateKeyExclusive, complianceWindow) {
   var dateKeys = [];
   var cumulativeCount = [];
   var compliancePct = [];
-  var successCount = 0;
-  var elapsed = 0;
+  var runningSuccessCount = 0;
+  var complianceSuccessCount = 0;
+  var complianceElapsed = 0;
   var dateKey = fromDateKey;
 
   while (dateKey < toDateKeyExclusive) {
-    elapsed++;
-    if (statusByDate[dateKey] === 'success') {
-      successCount++;
+    var isSuccess = statusByDate[dateKey] === 'success';
+    if (isSuccess) {
+      runningSuccessCount++;
     }
     dateKeys.push(dateKey);
-    cumulativeCount.push(successCount);
-    compliancePct.push(Math.round((successCount / elapsed) * 100));
+    cumulativeCount.push(runningSuccessCount);
+
+    var withinComplianceWindow =
+      !complianceWindow ||
+      (dateKey >= complianceWindow.startDateKey &&
+        (!complianceWindow.endDateKeyExclusive || dateKey < complianceWindow.endDateKeyExclusive));
+    if (withinComplianceWindow) {
+      complianceElapsed++;
+      if (isSuccess) {
+        complianceSuccessCount++;
+      }
+      compliancePct.push(Math.round((complianceSuccessCount / complianceElapsed) * 100));
+    } else {
+      compliancePct.push(null);
+    }
+
     dateKey = addDaysToDateKey(dateKey, 1);
   }
 

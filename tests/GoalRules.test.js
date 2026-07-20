@@ -58,6 +58,35 @@ describe('GoalRules', function () {
     });
   });
 
+  describe('complianceWindow', function () {
+    it('matches CalendarService.getGoalComplianceWindow for a windowed goal', function () {
+      var goal = {
+        id: 'goal-1',
+        name: 'Run 3 miles',
+        icon: '🏃',
+        startDate: '2026-07-01',
+        durationDays: 30,
+        createdAt: '2026-06-01T00:00:00.000Z'
+      };
+      expect(GoalRules.complianceWindow(goal)).toEqual({
+        startDateKey: '2026-07-01',
+        endDateKeyExclusive: '2026-07-31'
+      });
+    });
+
+    it('returns a null endDateKeyExclusive for a forever goal', function () {
+      var goal = {
+        id: 'goal-1',
+        name: 'Meditate',
+        icon: '🧘',
+        startDate: '2026-07-01',
+        durationDays: 0,
+        createdAt: '2026-06-01T00:00:00.000Z'
+      };
+      expect(GoalRules.complianceWindow(goal).endDateKeyExclusive).toBeNull();
+    });
+  });
+
   describe('isForever', function () {
     it('returns true when durationDays is 0', function () {
       expect(GoalRules.isForever({ startDate: '2026-07-01', durationDays: 0 })).toBe(true);

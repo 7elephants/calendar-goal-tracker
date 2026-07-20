@@ -169,6 +169,59 @@ describe('CalendarService', function () {
     });
   });
 
+  describe('getGoalComplianceWindow', function () {
+    it('returns the [startDate, startDate + durationDays) window for a windowed goal', function () {
+      var windowedGoal = {
+        id: 'goal-1',
+        name: 'Run 3 miles',
+        icon: '🏃',
+        startDate: '2026-07-01',
+        durationDays: 30,
+        createdAt: '2026-06-01T00:00:00.000Z'
+      };
+      expect(CalendarService.getGoalComplianceWindow(windowedGoal)).toEqual({
+        startDateKey: '2026-07-01',
+        endDateKeyExclusive: '2026-07-31'
+      });
+    });
+
+    it('returns a null endDateKeyExclusive for a forever goal (durationDays: 0)', function () {
+      var foreverGoal = {
+        id: 'goal-1',
+        name: 'Meditate',
+        icon: '🧘',
+        startDate: '2026-07-01',
+        durationDays: 0,
+        createdAt: '2026-06-01T00:00:00.000Z'
+      };
+      expect(CalendarService.getGoalComplianceWindow(foreverGoal)).toEqual({
+        startDateKey: '2026-07-01',
+        endDateKeyExclusive: null
+      });
+    });
+
+    it('returns a null endDateKeyExclusive when durationDays is missing entirely', function () {
+      var noWindowGoal = {
+        id: 'goal-1',
+        name: 'Meditate',
+        icon: '🧘',
+        startDate: '2026-07-01',
+        createdAt: '2026-06-01T00:00:00.000Z'
+      };
+      expect(CalendarService.getGoalComplianceWindow(noWindowGoal).endDateKeyExclusive).toBeNull();
+    });
+
+    it('falls back to createdAt for startDateKey when startDate is missing entirely', function () {
+      // Midday UTC keeps the local-time conversion on the same calendar day
+      // regardless of the test runner's timezone (getDateKey is local-time).
+      var veryOldGoal = { id: 'goal-1', name: 'Meditate', icon: '🧘', createdAt: '2026-06-15T12:00:00.000Z' };
+      expect(CalendarService.getGoalComplianceWindow(veryOldGoal)).toEqual({
+        startDateKey: '2026-06-15',
+        endDateKeyExclusive: null
+      });
+    });
+  });
+
   describe('getGoalStatusByDate', function () {
     it('maps each dateKey to its status within range', function () {
       CalendarService.setGoalStatus(goal, new Date(2026, 6, 1), 'success');

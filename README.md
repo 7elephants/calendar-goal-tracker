@@ -85,15 +85,26 @@ right on the calendar grid, no separate app to check.
   goals get a running compliance-% line instead — for each day, it's
   (days marked done so far) ÷ (days elapsed so far) in the selected range, so
   an unmarked day drags the percentage down exactly like an explicit miss
-  does. Each goal gets its own line on its chart (legend labeled by icon,
-  since goal names are never shown outside the Edit form — a second goal
-  sharing an icon gets a "(2)" suffix so the legend stays unambiguous); a
-  goal type with none active in the current range shows a "No ... goals to
-  chart in this range" message instead of an empty chart. The timeframe row
-  at the top has three quick presets (This month / Last 30 days / This year)
-  plus From/To date pickers and an Apply range button for any custom range;
-  a range extending into the future is clamped at today so it never plots a
-  flat, meaningless tail. Only active (non-deleted) goals are charted.
+  does. That running percentage only counts days within the goal's own
+  window ([start date, start date + duration)) — a day before the goal
+  started or on/after it ended never counts toward it, so a goal's
+  compliance line simply doesn't exist for those days (a gap, not a 0%)
+  rather than being punished for days it wasn't even running yet. A forever
+  goal (no stored duration) still excludes days before its start, just with
+  no upper bound; a goal with no stored start date at all falls back to its
+  creation date, same as everywhere else in this add-on that needs one. This
+  windowing only applies to the compliance chart — a Count only goal's
+  cumulative line still counts every day in the selected range regardless of
+  the goal's own window. Each goal gets its own line on its chart (legend
+  labeled by icon, since goal names are never shown outside the Edit form —
+  a second goal sharing an icon gets a "(2)" suffix so the legend stays
+  unambiguous); a goal type with none active in the current range shows a
+  "No ... goals to chart in this range" message instead of an empty chart.
+  The timeframe row at the top has three quick presets (This month / Last 30
+  days / This year) plus From/To date pickers and an Apply range button for
+  any custom range; a range extending into the future is clamped at today so
+  it never plots a flat, meaningless tail. Only active (non-deleted) goals
+  are charted.
 
 Goal *definitions* (name, icon, type, start date, duration in days, active
 flag) live in `PropertiesService.getUserProperties()`. Goal *status per
@@ -234,3 +245,8 @@ below instead.
 - [ ] With no Count only goals active, confirm the cumulative chart's section shows "No Count-only goals to chart in this range." instead of a blank or broken chart (and the equivalent message for Compliance % with no Pass/Fail goals).
 - [ ] Delete a goal, then open Graphs; confirm it no longer appears on either chart (only active goals are charted).
 - [ ] Confirm the Graphs card's charts have no interactive tooltips (they're static images) but the alt text on each identifies the chart when inspected.
+- [ ] Create a Pass/Fail goal with a start date a few days into the selected range; confirm its compliance line only appears starting on its start date, with no line (a gap, not a 0%) for the days before.
+- [ ] Give that same goal a duration that ends before the range's last day; confirm its compliance line stops exactly at the end of its window, with no line for the remaining days.
+- [ ] Confirm a forever Pass/Fail goal (no stored duration) still has its compliance line start exactly on its start date, but run all the way to the end of the range (or today) with no cutoff.
+- [ ] Select a range that starts and ends entirely before a Pass/Fail goal's start date (or entirely after its end date); confirm that goal's compliance line simply doesn't appear anywhere on the chart for that range.
+- [ ] Confirm a Count only goal's cumulative line is unaffected by its own start date/duration — it should still count every day in the selected range regardless of the goal's own window, since this exclusion only applies to the compliance chart.

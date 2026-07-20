@@ -36,6 +36,10 @@
  *       call: "getGoalSummaryStats(goal, todayDateKey)"
  *       input: "goal: Goal, todayDateKey: 'YYYY-MM-DD'"
  *       output: "{ durationDays, daysLeft, daysDone, daysMissed, currentStreak } for the homepage summary section; durationDays/daysLeft are null (rendered as infinite) for goals with no window. currentStreak is always computed regardless of goal type/window state - the caller (HomeCard.js) decides whether to display it, same as daysMissed already being hidden for Count-only goals. Fetches getGoalStatusByDate once and derives both the daysDone/daysMissed tally and currentStreak from it, rather than querying Calendar twice."
+ *     - step: 9
+ *       call: "getGoalComplianceWindow(goal)"
+ *       input: "goal: Goal"
+ *       output: "{ startDateKey, endDateKeyExclusive } - the day range a goal's own window covers, used by ChartData.js's buildDailySeries to exclude days outside a goal's run from the Graphs card's compliance chart. startDateKey falls back to createdAt when startDate is missing entirely (same fallback getGoalSummaryStats uses); endDateKeyExclusive is null for goals with no fixed duration (goalHasWindow false), meaning nothing is excluded on the trailing end."
  * ---
  */
 
@@ -163,6 +167,22 @@ function getGoalWindowStatus(goal, dateKey) {
 }
 
 /**
+ * The [startDateKey, endDateKeyExclusive) window within which a goal's days
+ * should count toward compliance-chart math (see ChartData.js's
+ * buildDailySeries). startDateKey falls back to the goal's createdAt when
+ * even startDate is missing (goals that predate that field), same fallback
+ * getGoalSummaryStats already uses. endDateKeyExclusive is null for goals
+ * with no fixed duration (goalHasWindow false) - they have a start but never
+ * a hard end, so nothing is excluded on that side.
+ */
+function getGoalComplianceWindow(goal) {
+  return {
+    startDateKey: goal.startDate || getDateKey(new Date(goal.createdAt)),
+    endDateKeyExclusive: goalHasWindow(goal) ? addDaysToDateKey(goal.startDate, goal.durationDays) : null
+  };
+}
+
+/**
  * Maps each tagged status event for a goal within [fromDateKey,
  * toDateKeyExclusive) to its dateKey, paginating through Calendar.Events.list
  * since a long-running goal can have more results than one page returns.
@@ -281,6 +301,7 @@ if (typeof module !== 'undefined') {
     getGoalStatusForDate: getGoalStatusForDate,
     goalHasWindow: goalHasWindow,
     getGoalWindowStatus: getGoalWindowStatus,
+    getGoalComplianceWindow: getGoalComplianceWindow,
     getGoalStatusByDate: getGoalStatusByDate,
     calculateStreak: calculateStreak,
     getGoalSummaryStats: getGoalSummaryStats,

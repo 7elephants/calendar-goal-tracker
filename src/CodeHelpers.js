@@ -27,7 +27,7 @@
  *     - step: 6
  *       call: "resolveGraphsRange_(e, todayDateKey) / buildGraphsCardForRange_(fromDateKey, toDateKeyExclusive) / buildGraphsCardOrErrorCard_(fromDateKey, toDateKeyExclusive)"
  *       input: "e: the action event (e.parameters.preset for a preset button, or e.formInput.graphFromDate/graphToDate for the custom-range Apply button), todayDateKey: 'YYYY-MM-DD'; fromDateKey/toDateKeyExclusive: 'YYYY-MM-DD'"
- *       output: "resolveGraphsRange_: { fromDateKey, toDateKeyExclusive } - a preset parameter always wins over any submitted DatePicker values; an invalid/incomplete custom range (missing or end-before-start) falls back to the current month, same as the card's own default. buildGraphsCardForRange_: GraphsCard.buildGraphsCard() built from active goals partitioned by GoalRules.isCountOnly, each fetched once via CalendarService.getGoalStatusByDate() and walked once via ChartData.buildDailySeries() (one call, both series). The range's end is clamped to tomorrow so future days never appear as a flat 0%/0-count tail. buildGraphsCardOrErrorCard_ wraps it in the same try/catch pattern as buildHomeCardOrErrorCard_."
+ *       output: "resolveGraphsRange_: { fromDateKey, toDateKeyExclusive } - a preset parameter always wins over any submitted DatePicker values; an invalid/incomplete custom range (missing or end-before-start) falls back to the current month, same as the card's own default. buildGraphsCardForRange_: GraphsCard.buildGraphsCard() built from active goals partitioned by GoalRules.isCountOnly, each fetched once via CalendarService.getGoalStatusByDate() and walked once via ChartData.buildDailySeries() (one call, both series) through the buildSeriesList_ helper. The range's end is clamped to tomorrow so future days never appear as a flat 0%/0-count tail. The compliance series (only) is additionally clipped to each goal's own GoalRules.complianceWindow(goal), so a day before a goal started or on/after it ended is excluded from that goal's % math entirely (rendered as a gap, not a 0%) rather than counting as a miss - the count-only series is never clipped this way. buildGraphsCardOrErrorCard_ wraps it in the same try/catch pattern as buildHomeCardOrErrorCard_."
  * ---
  */
 
@@ -142,13 +142,17 @@ function resolveGraphsRange_(e, todayDateKey) {
  * Fetches getGoalStatusByDate once per goal and walks it once via
  * ChartData.buildDailySeries, picking cumulativeCount or compliancePct
  * off the result via valuesKey depending on which chart the caller is
- * building series for.
+ * building series for. useComplianceWindow (compliance chart only) clips
+ * each goal's own compliancePct values to its own [start, start+duration)
+ * window via GoalRules.complianceWindow, so days outside a goal's run
+ * come back null (rendered as a gap) instead of counting toward it.
  */
-function buildSeriesList_(goals, fromDateKey, toDateKeyExclusive, valuesKey) {
+function buildSeriesList_(goals, fromDateKey, toDateKeyExclusive, valuesKey, useComplianceWindow) {
   var labels = ChartData.labelGoalsByIcon(goals);
   return goals.map(function (goal, i) {
     var statusByDate = getGoalStatusByDate(goal.id, fromDateKey, toDateKeyExclusive);
-    var series = ChartData.buildDailySeries(statusByDate, fromDateKey, toDateKeyExclusive);
+    var complianceWindow = useComplianceWindow ? GoalRules.complianceWindow(goal) : undefined;
+    var series = ChartData.buildDailySeries(statusByDate, fromDateKey, toDateKeyExclusive, complianceWindow);
     return { label: labels[i], values: series[valuesKey] };
   });
 }
@@ -158,7 +162,10 @@ function buildSeriesList_(goals, fromDateKey, toDateKeyExclusive, valuesKey) {
  * else into the compliance chart via buildSeriesList_ - see
  * GoalRules.isCountOnly. The end of the range is clamped to tomorrow so a
  * "this month" or custom range that extends past today never plots a flat,
- * meaningless tail of future days.
+ * meaningless tail of future days. Only the compliance series is clipped to
+ * each goal's own window (useComplianceWindow: true) - a goal's cumulative
+ * count still counts every day in the selected range, unaffected by its
+ * own start/end.
  */
 function buildGraphsCardForRange_(fromDateKey, toDateKeyExclusive) {
   var tomorrow = addDaysToDateKey(todayDateKey_(), 1);
@@ -171,8 +178,14 @@ function buildGraphsCardForRange_(fromDateKey, toDateKeyExclusive) {
   });
 
   var dateKeys = ChartData.buildDailySeries({}, fromDateKey, effectiveEndExclusive).dateKeys;
-  var countSeriesList = buildSeriesList_(countGoals, fromDateKey, effectiveEndExclusive, 'cumulativeCount');
-  var complianceSeriesList = buildSeriesList_(complianceGoals, fromDateKey, effectiveEndExclusive, 'compliancePct');
+  var countSeriesList = buildSeriesList_(countGoals, fromDateKey, effectiveEndExclusive, 'cumulativeCount', false);
+  var complianceSeriesList = buildSeriesList_(
+    complianceGoals,
+    fromDateKey,
+    effectiveEndExclusive,
+    'compliancePct',
+    true
+  );
 
   return buildGraphsCard(fromDateKey, toDateKeyExclusive, dateKeys, countSeriesList, complianceSeriesList);
 }

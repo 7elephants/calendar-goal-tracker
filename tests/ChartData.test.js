@@ -54,6 +54,60 @@ describe('ChartData', function () {
       // 1/1=100, 1/2=50, 1/3=33.33 -> 33
       expect(series.compliancePct).toEqual([100, 50, 33]);
     });
+
+    describe('with a complianceWindow', function () {
+      it('nulls out compliancePct for days before the window start, without affecting cumulativeCount', function () {
+        var statusByDate = { '2026-07-01': 'success', '2026-07-03': 'success' };
+        var series = ChartData.buildDailySeries(statusByDate, '2026-07-01', '2026-07-05', {
+          startDateKey: '2026-07-03',
+          endDateKeyExclusive: null
+        });
+        // Eligible days are 07-03 (success, 1/1=100%) and 07-04 (unmarked, 1/2=50%).
+        expect(series.compliancePct).toEqual([null, null, 100, 50]);
+        expect(series.cumulativeCount).toEqual([1, 1, 2, 2]);
+      });
+
+      it('nulls out compliancePct for days on/after the window end, without affecting cumulativeCount', function () {
+        var statusByDate = { '2026-07-01': 'success', '2026-07-03': 'success' };
+        var series = ChartData.buildDailySeries(statusByDate, '2026-07-01', '2026-07-05', {
+          startDateKey: '2026-07-01',
+          endDateKeyExclusive: '2026-07-03'
+        });
+        // Eligible days are 07-01 (success, 1/1=100%) and 07-02 (unmarked, 1/2=50%).
+        expect(series.compliancePct).toEqual([100, 50, null, null]);
+        expect(series.cumulativeCount).toEqual([1, 1, 2, 2]);
+      });
+
+      it('computes the running percentage only over eligible days, not the whole chart range', function () {
+        // Window opens on 07-03; the fail on 07-01 (before the window) must not
+        // count against the goal's compliance once it becomes eligible.
+        var statusByDate = { '2026-07-01': 'fail', '2026-07-03': 'success', '2026-07-04': 'fail' };
+        var series = ChartData.buildDailySeries(statusByDate, '2026-07-01', '2026-07-05', {
+          startDateKey: '2026-07-03',
+          endDateKeyExclusive: null
+        });
+        expect(series.compliancePct).toEqual([null, null, 100, 50]);
+      });
+
+      it('applies no upper-bound exclusion when endDateKeyExclusive is null (forever goal)', function () {
+        var statusByDate = { '2026-07-04': 'success' };
+        var series = ChartData.buildDailySeries(statusByDate, '2026-07-01', '2026-07-06', {
+          startDateKey: '2026-07-01',
+          endDateKeyExclusive: null
+        });
+        // Every day 07-01..07-05 is eligible; running % keeps advancing past
+        // the window start with no cutoff on the trailing end.
+        expect(series.compliancePct).toEqual([0, 0, 0, 25, 20]);
+      });
+
+      it('nulls out every day when the window has no overlap with the chart range at all', function () {
+        var series = ChartData.buildDailySeries({}, '2026-07-01', '2026-07-04', {
+          startDateKey: '2026-08-01',
+          endDateKeyExclusive: null
+        });
+        expect(series.compliancePct).toEqual([null, null, null]);
+      });
+    });
   });
 
   describe('presetRange', function () {
