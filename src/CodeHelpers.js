@@ -24,6 +24,10 @@
  *       call: "buildHomeCardForDate_(dateKey) / buildHomeCardOrErrorCard_(dateKey)"
  *       input: "dateKey: 'YYYY-MM-DD'"
  *       output: "HomeCard.buildHomeCard() built from GoalService.listGoals() + CalendarService.getGoalStatusForDate() + GoalRules.summaryStats() (the latter's result now also carries todayWindowStatus - always today's window state, not whichever day is being viewed - so HomeCard.js can decide whether an upcoming/completed goal's streak should be displayed). buildHomeCardOrErrorCard_ wraps it in a try/catch so a Calendar API failure (quota, transient error, revoked scope) renders an error card instead of crashing the whole add-on."
+ *     - step: 6
+ *       call: "resolveGraphsRange_(e, todayDateKey) / buildGraphsCardForRange_(fromDateKey, toDateKeyExclusive) / buildGraphsCardOrErrorCard_(fromDateKey, toDateKeyExclusive)"
+ *       input: "e: the action event (e.parameters.preset for a preset button, or e.formInput.graphFromDate/graphToDate for the custom-range Apply button), todayDateKey: 'YYYY-MM-DD'; fromDateKey/toDateKeyExclusive: 'YYYY-MM-DD'"
+ *       output: "resolveGraphsRange_: { fromDateKey, toDateKeyExclusive } - a preset parameter always wins over any submitted DatePicker values; an invalid/incomplete custom range (missing or end-before-start) falls back to the current month, same as the card's own default. buildGraphsCardForRange_: GraphsCard.buildGraphsCard() built from active goals partitioned by GoalRules.isCountOnly, each fetched once via CalendarService.getGoalStatusByDate() and walked once via ChartData.buildDailySeries() (one call, both series). The range's end is clamped to tomorrow so future days never appear as a flat 0%/0-count tail. buildGraphsCardOrErrorCard_ wraps it in the same try/catch pattern as buildHomeCardOrErrorCard_."
  * ---
  */
 
@@ -106,6 +110,81 @@ function buildHomeCardForDate_(dateKey) {
 function buildHomeCardOrErrorCard_(dateKey) {
   try {
     return buildHomeCardForDate_(dateKey);
+  } catch (err) {
+    return buildErrorCard(err.message);
+  }
+}
+
+/**
+ * A preset button (e.parameters.preset) always wins over a submitted custom
+ * range, since clicking a preset re-submits whatever the From/To pickers
+ * happened to be showing along with it. An incomplete or end-before-start
+ * custom range falls back to the current month rather than erroring, same
+ * as the card's own first-open default.
+ */
+function resolveGraphsRange_(e, todayDateKey) {
+  var params = e.parameters || {};
+  if (params.preset) {
+    return ChartData.presetRange(params.preset, todayDateKey);
+  }
+
+  var formInput = e.formInput || {};
+  var fromDateKey = datePickerValueToDateKey_(formInput.graphFromDate);
+  var toDateKey = datePickerValueToDateKey_(formInput.graphToDate);
+  if (fromDateKey && toDateKey && fromDateKey <= toDateKey) {
+    return { fromDateKey: fromDateKey, toDateKeyExclusive: addDaysToDateKey(toDateKey, 1) };
+  }
+
+  return ChartData.presetRange('thisMonth', todayDateKey);
+}
+
+/**
+ * Fetches getGoalStatusByDate once per goal and walks it once via
+ * ChartData.buildDailySeries, picking cumulativeCount or compliancePct
+ * off the result via valuesKey depending on which chart the caller is
+ * building series for.
+ */
+function buildSeriesList_(goals, fromDateKey, toDateKeyExclusive, valuesKey) {
+  var labels = ChartData.labelGoalsByIcon(goals);
+  return goals.map(function (goal, i) {
+    var statusByDate = getGoalStatusByDate(goal.id, fromDateKey, toDateKeyExclusive);
+    var series = ChartData.buildDailySeries(statusByDate, fromDateKey, toDateKeyExclusive);
+    return { label: labels[i], values: series[valuesKey] };
+  });
+}
+
+/**
+ * Routes count-only goals into the cumulative-count chart and everything
+ * else into the compliance chart via buildSeriesList_ - see
+ * GoalRules.isCountOnly. The end of the range is clamped to tomorrow so a
+ * "this month" or custom range that extends past today never plots a flat,
+ * meaningless tail of future days.
+ */
+function buildGraphsCardForRange_(fromDateKey, toDateKeyExclusive) {
+  var tomorrow = addDaysToDateKey(todayDateKey_(), 1);
+  var effectiveEndExclusive = toDateKeyExclusive < tomorrow ? toDateKeyExclusive : tomorrow;
+
+  var goals = listGoals().filter(GoalRules.isActive);
+  var countGoals = goals.filter(GoalRules.isCountOnly);
+  var complianceGoals = goals.filter(function (goal) {
+    return !GoalRules.isCountOnly(goal);
+  });
+
+  var dateKeys = ChartData.buildDailySeries({}, fromDateKey, effectiveEndExclusive).dateKeys;
+  var countSeriesList = buildSeriesList_(countGoals, fromDateKey, effectiveEndExclusive, 'cumulativeCount');
+  var complianceSeriesList = buildSeriesList_(complianceGoals, fromDateKey, effectiveEndExclusive, 'compliancePct');
+
+  return buildGraphsCard(fromDateKey, toDateKeyExclusive, dateKeys, countSeriesList, complianceSeriesList);
+}
+
+/**
+ * Wraps buildGraphsCardForRange_ so a Calendar API failure (quota,
+ * transient error, revoked scope) renders an error card instead of
+ * crashing the Graphs card, same as buildHomeCardOrErrorCard_.
+ */
+function buildGraphsCardOrErrorCard_(fromDateKey, toDateKeyExclusive) {
+  try {
+    return buildGraphsCardForRange_(fromDateKey, toDateKeyExclusive);
   } catch (err) {
     return buildErrorCard(err.message);
   }

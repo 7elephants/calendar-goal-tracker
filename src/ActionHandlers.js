@@ -20,6 +20,10 @@
  *       call: "handleOpenAllGoalsCard(e)"
  *       input: "none"
  *       output: "ActionResponse that pushes AllGoalsCard.buildAllGoalsCard(), partitioning GoalService.listGoals() into active/soft-deleted via GoalRules.isActive and mapping each to { goal, summary: GoalRules.summaryStats(goal, today) } - this is the only place in the add-on a soft-deleted goal's data becomes visible again (still read-only; there is no restore action)."
+ *     - step: 5
+ *       call: "handleOpenGraphsCard(e) / handleUpdateGraphsRange(e)"
+ *       input: "handleOpenGraphsCard: none. handleUpdateGraphsRange: e.parameters.preset ('thisMonth'|'last30'|'thisYear') from a preset button, or e.formInput.graphFromDate/graphToDate from the Apply range button - see CodeHelpers.js's resolveGraphsRange_ for how these are reconciled."
+ *       output: "handleOpenGraphsCard pushes GraphsCard.buildGraphsCard() defaulted to the current month (CodeHelpers.buildGraphsCardOrErrorCard_ via ChartData.presetRange('thisMonth', ...)). handleUpdateGraphsRange resolves the requested range and updates the same card in place (no push/pop, matching handleShiftDay's in-place style) rather than opening a new card."
  * ---
  */
 
@@ -90,6 +94,24 @@ function handleOpenAllGoalsCard(e) {
   var card = buildAllGoalsCard(activeGoalsWithSummary, deletedGoalsWithSummary);
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation().pushCard(card))
+    .build();
+}
+
+function handleOpenGraphsCard(e) {
+  var today = todayDateKey_();
+  var range = ChartData.presetRange('thisMonth', today);
+  var card = buildGraphsCardOrErrorCard_(range.fromDateKey, range.toDateKeyExclusive);
+  return CardService.newActionResponseBuilder()
+    .setNavigation(CardService.newNavigation().pushCard(card))
+    .build();
+}
+
+function handleUpdateGraphsRange(e) {
+  var today = todayDateKey_();
+  var range = resolveGraphsRange_(e, today);
+  var updatedCard = buildGraphsCardOrErrorCard_(range.fromDateKey, range.toDateKeyExclusive);
+  return CardService.newActionResponseBuilder()
+    .setNavigation(CardService.newNavigation().updateCard(updatedCard))
     .build();
 }
 

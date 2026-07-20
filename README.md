@@ -77,6 +77,23 @@ right on the calendar grid, no separate app to check.
   row (icon, duration, done/missed counts, streak). This is the only place
   a deleted goal's data is visible again; there's no restore action here,
   just a historical record.
+- **Graphs**, next to View all goals, opens a card with two time-series
+  charts, x-axis always time and defaulting to the current calendar month.
+  **Count only** goals get a cumulative "days done" line — it resets to 0 at
+  the start of whichever timeframe you've selected (not a lifetime total)
+  and climbs by one on each day you marked done within that window. **Pass/Fail**
+  goals get a running compliance-% line instead — for each day, it's
+  (days marked done so far) ÷ (days elapsed so far) in the selected range, so
+  an unmarked day drags the percentage down exactly like an explicit miss
+  does. Each goal gets its own line on its chart (legend labeled by icon,
+  since goal names are never shown outside the Edit form — a second goal
+  sharing an icon gets a "(2)" suffix so the legend stays unambiguous); a
+  goal type with none active in the current range shows a "No ... goals to
+  chart in this range" message instead of an empty chart. The timeframe row
+  at the top has three quick presets (This month / Last 30 days / This year)
+  plus From/To date pickers and an Apply range button for any custom range;
+  a range extending into the future is clamped at today so it never plots a
+  flat, meaningless tail. Only active (non-deleted) goals are charted.
 
 Goal *definitions* (name, icon, type, start date, duration in days, active
 flag) live in `PropertiesService.getUserProperties()`. Goal *status per
@@ -97,12 +114,14 @@ src/            Apps Script source (pushed to Google via clasp)
   HomeCard.js        Home card CardService UI (today's goals + Goal summary)
   GoalFormCard.js    Create/edit goal form CardService UI
   AllGoalsCard.js    Read-only "View all goals" card, grouped by Active/Completed (soft-deleted)
+  GraphsCard.js      "Graphs" card: timeframe picker + the two chart images, backed by the built-in Charts service
   MiscCards.js       Small standalone cards (date picker, error card)
   CardTheme.js       Shared button color constants
   GoalService.js     Goal validation + CRUD, backed by PropertiesService
   CalendarService.js Calendar event read/write + goal window/summary logic, backed by the advanced Calendar API service
   GoalRules.js       Namespace object grouping goal-first-arg logic (windowStatus/summaryStats/isForever/isCountOnly) for a more objectified call style
   DateKeyUtils.js    Pure 'YYYY-MM-DD' dateKey math, no Apps Script dependency
+  ChartData.js       Pure per-day chart series math (cumulative count, running compliance %) + timeframe presets, no Apps Script dependency
 tests/          Jest unit tests for the pure/testable logic
 README.md       This file
 ```
@@ -146,17 +165,20 @@ npm run test:coverage
 ```
 
 **Coverage note:** `GoalService.js`, `CalendarService.js`, `GoalRules.js`,
-`DateKeyUtils.js`, and `CardTheme.js` are unit tested (mocking
-`PropertiesService`/`Calendar` globals where needed) and sit at ~97-100%
+`DateKeyUtils.js`, `CardTheme.js`, and `ChartData.js` are unit tested
+(mocking `PropertiesService`/`Calendar` globals where needed, or — for
+`ChartData.js` — pure with no globals to mock at all) and sit at ~97-100%
 line coverage. `Triggers.js`, `ActionHandlers.js`, `CodeHelpers.js`,
-`HomeCard.js`, `GoalFormCard.js`, `AllGoalsCard.js`, and `MiscCards.js` are
-intentionally excluded from coverage collection (see `jest.config.js`)
-because they are thin wiring around `CardService` and Calendar add-on trigger objects
-(`e.parameters`, `e.formInput`, card navigation) that only exist inside a
-live Google Calendar session with a real OAuth-authenticated add-on
-install. There is no way to instantiate `CardService` outside that runtime,
-so 100% coverage of those files isn't achievable with Jest — they're
-covered by the manual test plan below instead.
+`HomeCard.js`, `GoalFormCard.js`, `AllGoalsCard.js`, `GraphsCard.js`, and
+`MiscCards.js` are intentionally excluded from coverage collection (see
+`jest.config.js`) because they are thin wiring around `CardService`,
+Calendar add-on trigger objects (`e.parameters`, `e.formInput`, card
+navigation), or (for `GraphsCard.js`) the built-in `Charts`/`Utilities`
+services, that only exist inside a live Google Calendar session with a real
+OAuth-authenticated add-on install. There is no way to instantiate
+`CardService` or `Charts` outside that runtime, so 100% coverage of those
+files isn't achievable with Jest — they're covered by the manual test plan
+below instead.
 
 ### Manual test plan (run after `npm run push` + reload the add-on)
 
@@ -201,3 +223,14 @@ covered by the manual test plan below instead.
 - [ ] Delete a goal, then tap "View all goals"; confirm it now appears under "Completed" instead of "Active", still showing its historical stats, and confirm there is no button to restore it.
 - [ ] With no deleted goals yet, tap "View all goals"; confirm the "Completed" section shows "No completed goals." rather than being blank or missing.
 - [ ] Confirm "View all goals" rows have no action buttons at all (no Mark done/Edit/Delete) — purely read-only, matching the home card's Goal summary section.
+- [ ] Tap "Graphs"; confirm the card opens defaulted to the current month, with a "Cumulative days done" chart and a "Compliance %" chart, each rendered as an image.
+- [ ] With at least two Count only goals, mark different numbers of days done on each; confirm the cumulative chart shows one line per goal (legend by icon) and each line starts at 0 on the first day of the range.
+- [ ] With at least one Pass/Fail goal, mark some days done and some missed within the range; confirm the compliance line drops on missed days and on unmarked days, and rises back up on done days.
+- [ ] Give two goals the same icon; confirm the chart legend shows the second one suffixed "(2)" rather than two indistinguishable entries.
+- [ ] Tap each timeframe preset (This month / Last 30 days / This year); confirm both charts re-render in place for the new range without leaving the Graphs card.
+- [ ] Pick a custom From/To range with the date pickers and tap "Apply range"; confirm both charts re-render for exactly that range (the To day is included).
+- [ ] Pick a custom range whose To date extends past today; confirm the charts stop at today rather than showing a flat trailing tail.
+- [ ] Pick a custom range with To before From, then tap "Apply range"; confirm it falls back to the current month rather than erroring.
+- [ ] With no Count only goals active, confirm the cumulative chart's section shows "No Count-only goals to chart in this range." instead of a blank or broken chart (and the equivalent message for Compliance % with no Pass/Fail goals).
+- [ ] Delete a goal, then open Graphs; confirm it no longer appears on either chart (only active goals are charted).
+- [ ] Confirm the Graphs card's charts have no interactive tooltips (they're static images) but the alt text on each identifies the chart when inspected.
