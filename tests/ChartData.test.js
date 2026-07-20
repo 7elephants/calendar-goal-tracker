@@ -132,6 +132,13 @@ describe('ChartData', function () {
       });
     });
 
+    it('spans the trailing 90 days (inclusive of today) for "last90"', function () {
+      expect(ChartData.presetRange('last90', '2026-07-30')).toEqual({
+        fromDateKey: '2026-05-02',
+        toDateKeyExclusive: '2026-07-31'
+      });
+    });
+
     it('spans the current calendar year for "thisYear"', function () {
       expect(ChartData.presetRange('thisYear', '2026-07-15')).toEqual({
         fromDateKey: '2026-01-01',

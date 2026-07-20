@@ -100,11 +100,11 @@ right on the calendar grid, no separate app to check.
   a second goal sharing an icon gets a "(2)" suffix so the legend stays
   unambiguous); a goal type with none active in the current range shows a
   "No ... goals to chart in this range" message instead of an empty chart.
-  The timeframe row at the top has three quick presets (This month / Last 30
-  days / This year) plus From/To date pickers and an Apply range button for
-  any custom range; a range extending into the future is clamped at today so
-  it never plots a flat, meaningless tail. Only active (non-deleted) goals
-  are charted.
+  The timeframe row at the top has four quick presets (This month / Last 30
+  days / Last 90 days / This year) plus From/To date pickers and an Apply
+  range button for any custom range; a range extending into the future is
+  clamped at today so it never plots a flat, meaningless tail. Only active
+  (non-deleted) goals are charted.
 
 Goal *definitions* (name, icon, type, start date, duration in days, active
 flag) live in `PropertiesService.getUserProperties()`. Goal *status per
@@ -238,7 +238,7 @@ below instead.
 - [ ] With at least two Count only goals, mark different numbers of days done on each; confirm the cumulative chart shows one line per goal (legend by icon) and each line starts at 0 on the first day of the range.
 - [ ] With at least one Pass/Fail goal, mark some days done and some missed within the range; confirm the compliance line drops on missed days and on unmarked days, and rises back up on done days.
 - [ ] Give two goals the same icon; confirm the chart legend shows the second one suffixed "(2)" rather than two indistinguishable entries.
-- [ ] Tap each timeframe preset (This month / Last 30 days / This year); confirm both charts re-render in place for the new range without leaving the Graphs card.
+- [ ] Tap each timeframe preset (This month / Last 30 days / Last 90 days / This year); confirm both charts re-render in place for the new range without leaving the Graphs card.
 - [ ] Pick a custom From/To range with the date pickers and tap "Apply range"; confirm both charts re-render for exactly that range (the To day is included).
 - [ ] Pick a custom range whose To date extends past today; confirm the charts stop at today rather than showing a flat trailing tail.
 - [ ] Pick a custom range with To before From, then tap "Apply range"; confirm it falls back to the current month rather than erroring.

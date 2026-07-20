@@ -10,7 +10,7 @@
  *       output: "{ dateKeys, cumulativeCount, compliancePct } - three equal-length arrays, one entry per day in [fromDateKey, toDateKeyExclusive). cumulativeCount resets to 0 at fromDateKey (not a lifetime total) and increments on each 'success' day, regardless of complianceWindow - it's only ever used for the Count-only chart, which this feature doesn't touch. compliancePct is successCount-so-far / days-elapsed-so-far * 100 (rounded) counted only over days within complianceWindow when one is given; a day outside it (before the goal started, or on/after its end) is neither a hit nor a miss - it's excluded from both the running numerator and denominator, and comes back as null so the caller can render a gap there instead of a value. Omitting complianceWindow preserves the original whole-range behavior exactly."
  *     - step: 2
  *       call: "presetRange(presetId, todayDateKey)"
- *       input: "presetId: 'thisMonth' | 'last30' | 'thisYear' (anything else falls back to 'thisMonth'), todayDateKey: 'YYYY-MM-DD'"
+ *       input: "presetId: 'thisMonth' | 'last30' | 'last90' | 'thisYear' (anything else falls back to 'thisMonth'), todayDateKey: 'YYYY-MM-DD'"
  *       output: "{ fromDateKey, toDateKeyExclusive } spanning the current calendar month / trailing 30 days (inclusive of today) / current calendar year"
  *     - step: 3
  *       call: "labelGoalsByIcon(goals)"
