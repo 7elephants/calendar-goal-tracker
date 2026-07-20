@@ -101,14 +101,14 @@ function presetRange(presetId, todayDateKey) {
       return { fromDateKey: addDaysToDateKey(todayDateKey, -89), toDateKeyExclusive: addDaysToDateKey(todayDateKey, 1) };
     case 'thisYear':
       return {
-      fromDateKey: firstOfYearDateKey(todayDateKey),
-      toDateKeyExclusive: firstOfNextYearDateKey(todayDateKey)
-    };
+        fromDateKey: firstOfYearDateKey(todayDateKey),
+        toDateKeyExclusive: firstOfNextYearDateKey(todayDateKey)
+      };
     default:
       return {
-    fromDateKey: firstOfMonthDateKey(todayDateKey),
-    toDateKeyExclusive: firstOfNextMonthDateKey(todayDateKey)
-  };
+        fromDateKey: firstOfMonthDateKey(todayDateKey),
+        toDateKeyExclusive: firstOfNextMonthDateKey(todayDateKey)
+      };
   }
 }
 
