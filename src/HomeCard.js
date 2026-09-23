@@ -28,7 +28,7 @@ function formatStatusLabel(status) {
 function formatDisplayDate(dateKey) {
   var parts = dateKey.split('-').map(Number);
   var d = new Date(parts[0], parts[1] - 1, parts[2]);
-  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'EEEE, MMMM d, yyyy');
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'EEE, MMM d, yyyy');
 }
 
 function formatWindowBadge(goal, dateKey) {
